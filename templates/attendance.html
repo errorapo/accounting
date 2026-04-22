@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Attendance{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Daily Attendance - {{ today }}</h2>
+    <p style="color: var(--text-muted); margin-bottom: 20px;">
+        <strong>Green</strong> = Present (Full Salary) | 
+        <strong>Orange</strong> = Half Day (Half Salary) | 
+        <strong>Red</strong> = Absent (No Salary)
+    </p>
+    
+    {% set types = ['Driver', 'Machine Operator', 'Manual Labour', 'Supervisor', 'Office Staff', 'Security'] %}
+    
+    {% for worker_type in types %}
+        {% set type_employees = employees|selectattr('employee_type', 'equalto', worker_type)|list %}
+        {% if type_employees %}
+        <h3 style="color: var(--accent-blue); margin-top: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">
+            {{ worker_type }}s ({{ type_employees|length }})
+        </h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Base Salary</th>
+                    <th>Hourly Rate</th>
+                    <th>Status</th>
+                    <th>Overtime</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for emp in type_employees %}
+                <tr>
+                    <td>{{ emp.name }}</td>
+                    <td>₹{{ "%.0f"|format(emp.base_salary) }}</td>
+                    <td>₹{{ "%.0f"|format(emp.hourly_rate) }}/hr</td>
+                    <td>
+                        {% if emp.id in present_ids %}
+                            {% for att in attendance_records %}
+                                {% if att.employee_id == emp.id %}
+                                    {% if att.status == 'present' %}
+                                        {% if att.half_day %}
+                                            <span style="color: #ffa502; font-weight: bold;">HALF DAY</span>
+                                        {% else %}
+                                            <span style="color: var(--success); font-weight: bold;">PRESENT</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span style="color: var(--danger); font-weight: bold;">ABSENT</span>
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                        {% else %}
+                            <span style="color: var(--text-muted);">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% for att in attendance_records %}
+                            {% if att.employee_id == emp.id %}
+                                {% if att.overtime_hours > 0 %}
+                                    <span style="color: var(--accent-blue);">{{ att.overtime_hours }} hrs</span>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            {% endif %}
+                        {% endfor %}
+                    </td>
+                    <td class="actions">
+                        <a href="{{ url_for('payroll.mark_attendance', id=emp.id, status='present') }}" class="btn btn-success" title="Full Day">P</a>
+                        <a href="{{ url_for('payroll.mark_attendance', id=emp.id, status='half') }}" class="btn" style="background: #ffa502; padding: 8px 12px;" title="Half Day">H</a>
+                        <a href="{{ url_for('payroll.mark_attendance', id=emp.id, status='absent') }}" class="btn btn-danger" title="Absent">A</a>
+                        {% for att in attendance_records %}
+                            {% if att.employee_id == emp.id %}
+                                <a href="{{ url_for('payroll.add_overtime', id=emp.id) }}" class="btn" title="Add Overtime">OT</a>
+                            {% endif %}
+                        {% endfor %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    {% endfor %}
+    
+    <div style="margin-top: 30px; padding: 20px; background: var(--bg-header); border-radius: 8px;">
+        <h3 style="color: var(--accent-blue); margin-bottom: 15px;">Calculate Today's Payroll</h3>
+        <p style="color: var(--text-muted); margin-bottom: 15px;">
+            <strong>Formula:</strong> Base Salary + (Overtime Hours × ₹150) + Allowances - PF Deduction
+        </p>
+        <ul style="color: var(--text-muted); margin-bottom: 15px;">
+            <li>Present = Full Base Salary</li>
+            <li>Half Day = Base Salary ÷ 2</li>
+            <li>Absent = ₹0</li>
+            <li>Overtime = Hours × ₹150/hr</li>
+        </ul>
+        <a href="{{ url_for('payroll.generate_payroll') }}" class="btn btn-success" style="font-size: 16px; padding: 15px 30px;">Generate Today's Payroll</a>
+        <a href="{{ url_for('payroll.payroll_list') }}" class="btn">View Payroll List</a>
+    </div>
+</div>
+{% endblock %}

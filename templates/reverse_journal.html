@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Reverse Journal Entry{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Reverse Journal Entry</h2>
+    <p><strong>Original Entry:</strong> {{ journal.description }}</p>
+    <p><strong>Date:</strong> {{ journal.date }}</p>
+    <p><strong>Amount:</strong> ₹{{ "%.2f"|format(journal.amount) }}</p>
+    
+    <form method="POST">
+        <div class="form-group">
+            <label>Reversal Reason</label>
+            <input type="text" name="reason" placeholder="e.g., Wrong entry - corrected">
+        </div>
+        <button type="submit" class="btn btn-warning">Reverse Entry</button>
+        <a href="{{ url_for('accounts.ledger') }}" class="btn">Cancel</a>
+    </form>
+    
+    <p style="color: red; margin-top: 15px;">
+        Note: This will create a reversing entry with opposite debit/credit accounts.
+        The original entry will NOT be deleted - it will be marked as reversed.
+    </p>
+</div>
+{% endblock %}

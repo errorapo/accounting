@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Record Payment{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Record Payment</h2>
+    {% if sale %}
+    <p><strong>Invoice:</strong> {{ sale.invoice_number }} | <strong>Customer:</strong> {{ sale.customer.name if sale.customer else sale.customer_id }}</p>
+    <p><strong>Total:</strong> ₹{{ "%.2f"|format(sale.total_amount) }} | <strong>Paid:</strong> ₹{{ "%.2f"|format(paid) }} | <strong>Outstanding:</strong> ₹{{ "%.2f"|format(outstanding) }}</p>
+    <form method="POST" action="{{ url_for('sales.add_payment', id=sale.id) }}">
+    {% elif purchase %}
+    <p><strong>Invoice:</strong> {{ purchase.invoice_number }} | <strong>Vendor:</strong> {{ purchase.vendor_name }}</p>
+    <p><strong>Total:</strong> ₹{{ "%.2f"|format(purchase.total_amount) }} | <strong>Paid:</strong> ₹{{ "%.2f"|format(paid) }} | <strong>Outstanding:</strong> ₹{{ "%.2f"|format(outstanding) }}</p>
+    <form method="POST" action="{{ url_for('purchases.add_payment', id=purchase.id) }}">
+    {% endif %}
+    <hr style="margin: 15px 0; border-color: var(--border-color);">
+        <div class="form-group">
+            <label>Payment Amount</label>
+            <input type="number" name="amount" step="0.01" required>
+        </div>
+        <div class="form-group">
+            <label>Payment Mode</label>
+            <select name="payment_mode">
+                <option value="cash">Cash</option>
+                <option value="bank">Bank Transfer</option>
+                <option value="upi">UPI</option>
+                <option value="cheque">Cheque</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Notes (optional)</label>
+            <input type="text" name="notes" placeholder="e.g. First installment">
+        </div>
+        <button type="submit" class="btn btn-success">Record Payment</button>
+        {% if sale %}
+        <a href="{{ url_for('sales.sales_list') }}" class="btn">Cancel</a>
+        {% elif purchase %}
+        <a href="{{ url_for('purchases.purchases_list') }}" class="btn">Cancel</a>
+        {% endif %}
+    </form>
+</div>
+{% endblock %}

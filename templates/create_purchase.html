@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Create Purchase{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Create New Purchase</h2>
+    <form method="POST">
+        <div class="form-group">
+            <label>Vendor Name</label>
+            <input type="text" name="vendor_name" required>
+        </div>
+        <div class="form-group">
+            <label>Payment Type</label>
+            <select name="payment_type" required>
+                <option value="cash">Cash (Paid Now)</option>
+                <option value="credit">Credit (Pay Later)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Stone Type</label>
+            <select name="stone_type" required>
+                <option value="">Select Stone Type</option>
+                <option value="Granite">Granite</option>
+                <option value="Limestone">Limestone</option>
+                <option value="Marble">Marble</option>
+                <option value="Sandstone">Sandstone</option>
+                <option value="Slate">Slate</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Size</label>
+            <select name="size" required>
+                <option value="">Select Size</option>
+                <option value="5mm">5mm</option>
+                <option value="10mm">10mm</option>
+                <option value="20mm">20mm</option>
+                <option value="40mm">40mm</option>
+                <option value="65mm">65mm</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Quantity (tons)</label>
+            <input type="number" name="quantity" step="0.01" required>
+        </div>
+        <div class="form-group">
+            <label>Rate per Ton</label>
+            <input type="number" name="rate" step="0.01" required>
+        </div>
+        <div class="form-group">
+            <label>GST Rate %</label>
+            <input type="number" name="gst_rate" step="0.01" value="5">
+        </div>
+        <div class="form-group">
+            <label>ITC Eligible (Input Tax Credit)</label>
+            <select name="itc_eligible">
+                <option value="1">Yes - ITC Claimable</option>
+                <option value="0">No - ITC Not Claimable</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-success">Create Purchase</button>
+        <a href="{{ url_for('purchases.purchases_list') }}" class="btn">Cancel</a>
+    </form>
+</div>
+{% endblock %}

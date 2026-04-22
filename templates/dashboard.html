@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="stats">
+    <div class="stat-card">
+        <h3>Active Employees</h3>
+        <div class="value">{{ total_employees }}</div>
+    </div>
+    <div class="stat-card">
+        <h3>Inventory Items</h3>
+        <div class="value">{{ total_inventory }}</div>
+    </div>
+    <div class="stat-card">
+        <h3>Monthly Sales</h3>
+        <div class="value">₹{{ "%.2f"|format(monthly_sales) }}</div>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 20px;">
+    <h2>Quick Links</h2>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <a href="{{ url_for('payroll.employees') }}" class="btn">Manage Employees</a>
+        <a href="{{ url_for('payroll.create_payroll') }}" class="btn">Create Payroll</a>
+        <a href="{{ url_for('inventory.index') }}" class="btn">Manage Inventory</a>
+        <a href="{{ url_for('sales.create_sale') }}" class="btn">Create Sale</a>
+        <a href="{{ url_for('accounts.ledger') }}" class="btn">View Ledger</a>
+        <a href="{{ url_for('reports.trial_balance') }}" class="btn">Trial Balance</a>
+    </div>
+</div>
+{% endblock %}

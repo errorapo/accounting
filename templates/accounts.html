@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Accounts{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Chart of Accounts <a href="{{ url_for('accounts.add_account') }}" class="btn" style="float: right;">Add Account</a></h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Account Name</th>
+                <th>Type</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for account in accounts %}
+            <tr>
+                <td>{{ account.id }}</td>
+                <td>{{ account.name }}</td>
+                <td>{{ account.account_type }}</td>
+                <td>
+                    <a href="{{ url_for('accounts.delete_account', id=account.id) }}" class="btn btn-danger">Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

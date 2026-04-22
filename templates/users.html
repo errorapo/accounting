@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Manage Users{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Manage Users <a href="{{ url_for('auth.add_user') }}" class="btn" style="float: right;">Add User</a></h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Username</th>
+                <th>Role</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr>
+                <td>{{ user.id }}</td>
+                <td>{{ user.username }}</td>
+                <td>
+                    <span style="color: {% if user.role == 'admin' %}var(--accent-blue){% else %}var(--text-muted){% endif %}; font-weight: bold;">
+                        {{ user.role|upper }}
+                    </span>
+                </td>
+                <td class="actions">
+                    {% if user.username != 'admin' %}
+                    <a href="{{ url_for('auth.delete_user', id=user.id) }}" class="btn btn-danger">Delete</a>
+                    {% else %}
+                    <span style="color: var(--text-muted);">Admin</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <a href="{{ url_for('dashboard.admin_dashboard') }}" class="btn" style="margin-top: 15px;">Back to Admin</a>
+</div>
+{% endblock %}

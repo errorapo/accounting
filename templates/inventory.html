@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Inventory{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Inventory <a href="{{ url_for('inventory.add_item') }}" class="btn" style="float: right;">Add Item</a></h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Stone Type</th>
+                <th>Size</th>
+                <th>Opening</th>
+                <th>Purchases</th>
+                <th>Sales</th>
+                <th>Closing Stock</th>
+                <th>Rate/Ton</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.id }}</td>
+                <td>{{ item.stone_type }}</td>
+                <td>{{ item.size }}</td>
+                <td>{{ item.opening_stock }}</td>
+                <td>{{ item.purchases }}</td>
+                <td>{{ item.sales }}</td>
+                <td>{{ item.closing_stock }}</td>
+                <td>₹{{ "%.2f"|format(item.rate_per_ton) }}</td>
+                <td class="actions">
+                    <a href="{{ url_for('inventory.purchase_item', id=item.id) }}" class="btn">Purchase</a>
+                    <a href="{{ url_for('inventory.sale_item', id=item.id) }}" class="btn">Sale</a>
+                    <a href="{{ url_for('inventory.edit_item', id=item.id) }}" class="btn">Edit</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

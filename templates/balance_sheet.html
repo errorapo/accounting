@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Balance Sheet{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Balance Sheet</h2>
+    <p style="color: #666; margin-bottom: 15px;">As of: {{ as_of_date }}</p>
+    <form method="get" style="margin-bottom: 20px;">
+        <label>As of Date: </label>
+        <input type="date" name="date" value="{{ as_of_date }}">
+        <button type="submit" class="btn">Generate</button>
+    </form>
+    <table>
+        <tr>
+            <td colspan="2"><strong>ASSETS</strong></td>
+        </tr>
+        {% for item in assets %}
+        <tr>
+            <td style="padding-left: 20px;">{{ item.name }}</td>
+            <td style="text-align: right;">₹{{ "%.2f"|format(item.balance) }}</td>
+        </tr>
+        {% endfor %}
+        <tr style="font-weight: bold; background: #e8f4e8;">
+            <td>Total Assets</td>
+            <td style="text-align: right;">₹{{ "%.2f"|format(total_assets) }}</td>
+        </tr>
+
+        <tr>
+            <td colspan="2"><strong>LIABILITIES</strong></td>
+        </tr>
+        {% for item in liabilities %}
+        <tr>
+            <td style="padding-left: 20px;">{{ item.name }}</td>
+            <td style="text-align: right;">₹{{ "%.2f"|format(item.balance) }}</td>
+        </tr>
+        {% endfor %}
+        <tr style="font-weight: bold; background: #e8f4e8;">
+            <td>Total Liabilities</td>
+            <td style="text-align: right;">₹{{ "%.2f"|format(total_liabilities) }}</td>
+        </tr>
+
+        <tr>
+            <td colspan="2"><strong>CAPITAL</strong></td>
+        </tr>
+        {% for item in capital %}
+        <tr>
+            <td style="padding-left: 20px;">{{ item.name }}</td>
+            <td style="text-align: right;">₹{{ "%.2f"|format(item.balance) }}</td>
+        </tr>
+        {% endfor %}
+        <tr style="font-weight: bold; background: #e8f4e8;">
+            <td>Total Capital</td>
+            <td style="text-align: right;">₹{{ "%.2f"|format(total_capital) }}</td>
+        </tr>
+
+        <tr style="font-weight: bold; font-size: 18px; background: #d4edda;">
+            <td>TOTAL (Liabilities + Capital)</td>
+            <td style="text-align: right;">₹{{ "%.2f"|format(total_liabilities + total_capital) }}</td>
+        </tr>
+    </table>
+    {% if is_balanced %}
+    <p style="color: green; margin-top: 10px;">✓ Balance Sheet is balanced</p>
+    {% else %}
+    <p style="color: red; margin-top: 10px;">⚠ Balance Sheet is NOT balanced! Assets should equal Liabilities + Capital</p>
+    {% endif %}
+    <a href="{{ url_for('reports.index') }}" class="btn" style="margin-top: 15px;">Back to Reports</a>
+</div>
+{% endblock %}

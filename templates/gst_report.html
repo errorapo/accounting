@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}GST Report{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>GST Report</h2>
+    <p style="color: #666; margin-bottom: 15px;">Period: {{ start_date }} to {{ end_date }}</p>
+    <form method="get" style="margin-bottom: 20px;">
+        <label>Start Date: </label>
+        <input type="date" name="start_date" value="{{ start_date }}">
+        <label>End Date: </label>
+        <input type="date" name="end_date" value="{{ end_date }}">
+        <button type="submit" class="btn">Generate</button>
+    </form>
+    <table>
+        <tr>
+            <td><strong>Output GST (Collected on Sales)</strong></td>
+            <td>₹{{ "%.2f"|format(output_gst) }}</td>
+        </tr>
+        <tr>
+            <td style="padding-left: 20px;"><strong>Less: Input GST Total</strong></td>
+            <td>(₹{{ "%.2f"|format(input_gst_total) }})</td>
+        </tr>
+        <tr>
+            <td style="padding-left: 40px;">  - ITC Eligible</td>
+            <td>₹{{ "%.2f"|format(itc_eligible_gst) }}</td>
+        </tr>
+        <tr>
+            <td style="padding-left: 40px;">  - ITC Non-Eligible</td>
+            <td>₹{{ "%.2f"|format(itc_non_eligible_gst) }}</td>
+        </tr>
+        <tr style="font-weight: bold; font-size: 18px; background: {% if net_gst > 0 %}#f8d7da{% else %}#d4edda{% endif %};">
+            <td>Net GST Payable/(ITC Receivable)</td>
+            <td>₹{{ "%.2f"|format(net_gst) }}</td>
+        </tr>
+    </table>
+    {% if net_gst > 0 %}
+    <p style="color: red;">GST to be paid: ₹{{ "%.2f"|format(net_gst) }}</p>
+    {% elif net_gst < 0 %}
+    <p style="color: green;">ITC available to claim: ₹{{ "%.2f"|format(net_gst|abs) }}</p>
+    {% else %}
+    <p style="color: blue;">No GST liability</p>
+    {% endif %}
+    <a href="{{ url_for('reports.index') }}" class="btn" style="margin-top: 15px;">Back to Reports</a>
+</div>
+{% endblock %}

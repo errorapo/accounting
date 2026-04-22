@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}General Ledger{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>General Ledger <a href="{{ url_for('accounts.add_journal') }}" class="btn" style="float: right;">Add Journal Entry</a></h2>
+    
+    <h3>Journal Entries</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for j in journal_entries %}
+            <tr>
+                <td>{{ j.date }}</td>
+                <td>{{ j.description }}</td>
+                <td>₹{{ "%.2f"|format(j.amount) }}</td>
+                <td>
+                    {% if j.is_reversal %}
+                    <span style="color: orange;">REVERSED</span>
+                    {% elif j.is_posted %}
+                    <span style="color: green;">Posted</span>
+                    {% else %}
+                    <span style="color: gray;">Draft</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if j.is_posted and not j.is_reversal %}
+                    <a href="{{ url_for('accounts.reverse_journal', id=j.id) }}" class="btn btn-warning">Reverse</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <h3>Transactions</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Account</th>
+                <th>Debit</th>
+                <th>Credit</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in transactions %}
+            <tr>
+                <td>{{ t.date }}</td>
+                <td>{{ t.description }}
+                    {% if t.is_reversal %}
+                    <span style="color: orange; font-size: 12px;">(Reversal)</span>
+                    {% endif %}
+                </td>
+                <td>{{ t.account_id }}</td>
+                <td>{{ "%.2f"|format(t.debit) if t.debit > 0 else '' }}</td>
+                <td>{{ "%.2f"|format(t.credit) if t.credit > 0 else '' }}</td>
+                <td>
+                    {% if t.is_reversal %}
+                    <span style="color: orange;">Reversed</span>
+                    {% elif t.is_posted %}
+                    <span style="color: green;">Posted</span>
+                    {% else %}
+                    <span style="color: gray;">Draft</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

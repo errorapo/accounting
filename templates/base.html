@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Rock Mining ERP{% endblock %}</title>
+    <style>
+        :root {
+            --bg-dark: #0f0f1a;
+            --bg-card: #1a1a2e;
+            --bg-header: #16213e;
+            --accent-blue: #00d4ff;
+            --accent-blue-dim: #0f3460;
+            --text-light: #e0e0e0;
+            --text-muted: #8892a0;
+            --border-color: #0f3460;
+            --success: #00d676;
+            --danger: #ff4757;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg-dark); color: var(--text-light); }
+        
+        .header { 
+            background: linear-gradient(90deg, var(--bg-header), var(--bg-card)); 
+            color: white; 
+            padding: 15px 20px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            border-bottom: 2px solid var(--accent-blue);
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+        }
+        .header h1 { font-size: 24px; text-shadow: 0 0 10px var(--accent-blue); }
+        .header a { color: var(--text-light); text-decoration: none; margin-left: 15px; transition: all 0.3s; }
+        .header a:hover { color: var(--accent-blue); text-shadow: 0 0 8px var(--accent-blue); }
+        
+        .container { max-width: 1200px; margin: 20px auto; padding: 20px; }
+        
+        .card { 
+            background: var(--bg-card); 
+            padding: 20px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3), inset 0 0 0 1px var(--border-color);
+            margin-bottom: 20px; 
+        }
+        .card h2 { 
+            color: var(--accent-blue); 
+            margin-bottom: 15px; 
+            border-bottom: 1px solid var(--border-color); 
+            padding-bottom: 10px; 
+            text-shadow: 0 0 5px rgba(0, 212, 255, 0.3);
+        }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        th { 
+            background: var(--bg-header); 
+            color: var(--accent-blue); 
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 1px;
+        }
+        tr:hover { background: rgba(0, 212, 255, 0.05); }
+        
+        .btn { 
+            display: inline-block; 
+            padding: 10px 20px; 
+            background: linear-gradient(135deg, var(--accent-blue), #0099cc); 
+            color: var(--bg-dark); 
+            text-decoration: none; 
+            border-radius: 5px; 
+            border: none; 
+            cursor: pointer; 
+            font-weight: bold;
+            transition: all 0.3s;
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+        }
+        .btn:hover { 
+            background: linear-gradient(135deg, #00e5ff, #00d4ff); 
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+            transform: translateY(-2px);
+        }
+        .btn-success { background: linear-gradient(135deg, var(--success), #00b359); }
+        .btn-success:hover { box-shadow: 0 0 20px rgba(0, 214, 118, 0.5); }
+        .btn-danger { background: linear-gradient(135deg, var(--danger), #cc3344); }
+        .btn-danger:hover { box-shadow: 0 0 20px rgba(255, 71, 87, 0.5); }
+        
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: var(--accent-blue); }
+        input, select, textarea { 
+            width: 100%; 
+            padding: 12px; 
+            border: 1px solid var(--border-color); 
+            border-radius: 5px; 
+            background: var(--bg-dark);
+            color: var(--text-light);
+        }
+        input:focus, select:focus, textarea:focus { 
+            outline: none; 
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+        }
+        
+        .flash { padding: 12px; margin-bottom: 15px; border-radius: 5px; }
+        .flash.success { background: rgba(0, 214, 118, 0.2); color: var(--success); border: 1px solid var(--success); }
+        .flash.error { background: rgba(255, 71, 87, 0.2); color: var(--danger); border: 1px solid var(--danger); }
+        
+        .nav { display: flex; gap: 10px; flex-wrap: wrap; }
+        .nav a { 
+            padding: 10px 15px; 
+            background: var(--bg-header); 
+            color: var(--text-light); 
+            text-decoration: none; 
+            border-radius: 5px; 
+            border: 1px solid var(--border-color);
+            transition: all 0.3s;
+        }
+        .nav a:hover { 
+            background: var(--accent-blue-dim); 
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+        }
+        
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+        .stat-card { 
+            background: var(--bg-card); 
+            padding: 20px; 
+            border-radius: 12px; 
+            text-align: center; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border: 1px solid var(--border-color);
+            transition: all 0.3s;
+        }
+        .stat-card:hover { 
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+        }
+        .stat-card h3 { font-size: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+        .stat-card .value { 
+            font-size: 28px; 
+            font-weight: bold; 
+            color: var(--accent-blue); 
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+        }
+        
+        .actions { display: flex; gap: 10px; }
+        
+        a { color: var(--accent-blue); }
+    </style>
+</head>
+<body>
+    {% if session.user_id %}
+    <div class="header">
+        <h1>Rock Mining ERP</h1>
+        <nav>
+            {% if session.role == 'admin' %}
+            <a href="{{ url_for('dashboard.admin_dashboard') }}">Admin</a>
+            <a href="{{ url_for('auth.users') }}">Users</a>
+            {% else %}
+            <a href="{{ url_for('dashboard.index') }}">Dashboard</a>
+            {% endif %}
+            <a href="{{ url_for('payroll.employees') }}">Payroll</a>
+            <a href="{{ url_for('payroll.attendance') }}">Attendance</a>
+            <a href="{{ url_for('inventory.index') }}">Inventory</a>
+            <a href="{{ url_for('sales.sales_list') }}">Sales</a>
+            <a href="{{ url_for('purchases.purchases_list') }}">Purchases</a>
+            <a href="{{ url_for('accounts.index') }}">Accounts</a>
+            <a href="{{ url_for('reports.index') }}">Reports</a>
+            <a href="{{ url_for('auth.logout') }}">Logout ({{ session.username }})</a>
+        </nav>
+    </div>
+    {% endif %}
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

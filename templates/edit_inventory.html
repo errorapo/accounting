@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Edit Inventory{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Edit Inventory Item</h2>
+    <form method="POST">
+        <div class="form-group">
+            <label>Stone Type</label>
+            <select name="stone_type" required>
+                <option value="Granite" {% if item.stone_type == 'Granite' %}selected{% endif %}>Granite</option>
+                <option value="Limestone" {% if item.stone_type == 'Limestone' %}selected{% endif %}>Limestone</option>
+                <option value="Marble" {% if item.stone_type == 'Marble' %}selected{% endif %}>Marble</option>
+                <option value="Sandstone" {% if item.stone_type == 'Sandstone' %}selected{% endif %}>Sandstone</option>
+                <option value="Slate" {% if item.stone_type == 'Slate' %}selected{% endif %}>Slate</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Size</label>
+            <select name="size" required>
+                <option value="5mm" {% if item.size == '5mm' %}selected{% endif %}>5mm</option>
+                <option value="10mm" {% if item.size == '10mm' %}selected{% endif %}>10mm</option>
+                <option value="20mm" {% if item.size == '20mm' %}selected{% endif %}>20mm</option>
+                <option value="40mm" {% if item.size == '40mm' %}selected{% endif %}>40mm</option>
+                <option value="65mm" {% if item.size == '65mm' %}selected{% endif %}>65mm</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Opening Stock</label>
+            <input type="number" name="opening_stock" step="0.01" value="{{ item.opening_stock }}">
+        </div>
+        <div class="form-group">
+            <label>Purchases</label>
+            <input type="number" name="purchases" step="0.01" value="{{ item.purchases }}">
+        </div>
+        <div class="form-group">
+            <label>Sales</label>
+            <input type="number" name="sales" step="0.01" value="{{ item.sales }}">
+        </div>
+        <div class="form-group">
+            <label>Rate per Ton</label>
+            <input type="number" name="rate_per_ton" step="0.01" value="{{ item.rate_per_ton }}">
+        </div>
+        <button type="submit" class="btn btn-success">Update Item</button>
+        <a href="{{ url_for('inventory.index') }}" class="btn">Cancel</a>
+    </form>
+</div>
+{% endblock %}

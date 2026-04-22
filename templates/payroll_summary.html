@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Payroll Summary{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Payroll Summary</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Employee ID</th>
+                <th>Month/Year</th>
+                <th>Gross</th>
+                <th>Deductions</th>
+                <th>Net Salary</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in payrolls %}
+            <tr>
+                <td>{{ p.id }}</td>
+                <td>{{ p.employee_id }}</td>
+                <td>{{ p.month }}/{{ p.year }}</td>
+                <td>₹{{ "%.2f"|format(p.gross_salary) }}</td>
+                <td>₹{{ "%.2f"|format(p.total_deductions) }}</td>
+                <td>₹{{ "%.2f"|format(p.net_salary) }}</td>
+            </tr>
+            {% endfor %}
+            <tr style="font-weight: bold;">
+                <td colspan="5">Total Net Salary</td>
+                <td>₹{{ "%.2f"|format(total) }}</td>
+            </tr>
+        </tbody>
+    </table>
+    <a href="{{ url_for('reports.index') }}" class="btn" style="margin-top: 15px;">Back to Reports</a>
+</div>
+{% endblock %}

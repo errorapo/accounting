@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}Accountant Dashboard{% endblock %}
+{% block content %}
+<style>
+    .chart-container { background: var(--bg-card); border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid var(--border-color); }
+    .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 768px) { .chart-row { grid-template-columns: 1fr; } }
+    .alert-box { background: rgba(255, 71, 87, 0.2); border: 1px solid var(--danger); padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+    .alert-box h3 { color: var(--danger); margin-bottom: 10px; }
+    .stat-box { text-align: center; padding: 20px; }
+    .stat-box .number { font-size: 32px; font-weight: bold; color: var(--accent-blue); }
+    .stat-box .label { color: var(--text-muted); font-size: 14px; }
+</style>
+
+<h1 style="color: var(--accent-blue); margin-bottom: 20px;">Accountant Dashboard</h1>
+
+<div class="stats" style="margin-bottom: 30px;">
+    <div class="stat-card">
+        <div class="stat-box">
+            <div class="number">₹{{ "%.0f"|format(monthly_sales) }}</div>
+            <div class="label">Total Sales</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-box">
+            <div class="number">₹{{ "%.0f"|format(total_salary) }}</div>
+            <div class="label">Total Salary Paid</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-box">
+            <div class="number">{{ total_employees }}</div>
+            <div class="label">Employees</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-box">
+            <div class="number">{{ total_customers }}</div>
+            <div class="label">Customers</div>
+        </div>
+    </div>
+</div>
+
+{% if inventory_low %}
+<div class="alert-box">
+    <h3>Low Stock Alert!</h3>
+    <p>The following items have low stock (less than 20 tons):</p>
+    <ul>
+    {% for item in inventory_low %}
+        <li>{{ item.stone_type }} - {{ item.size }}: {{ item.closing_stock }} tons</li>
+    {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<div class="chart-row">
+    <div class="chart-container">
+        <h3 style="color: var(--accent-blue); margin-bottom: 15px;">Sales Trends</h3>
+        <canvas id="salesChart" height="200"></canvas>
+    </div>
+    <div class="chart-container">
+        <h3 style="color: var(--accent-blue); margin-bottom: 15px;">Salary Expenses by Month</h3>
+        <canvas id="salaryChart" height="200"></canvas>
+    </div>
+</div>
+
+<div class="chart-row">
+    <div class="chart-container">
+        <h3 style="color: var(--accent-blue); margin-bottom: 15px;">Revenue vs Expenses</h3>
+        <canvas id="revenueChart" height="200"></canvas>
+    </div>
+    <div class="chart-container">
+        <h3 style="color: var(--accent-blue); margin-bottom: 15px;">Top Customers by Purchase</h3>
+        <canvas id="customerChart" height="200"></canvas>
+    </div>
+</div>
+
+<div class="chart-row">
+    <div class="chart-container" style="grid-column: span 2;">
+        <h3 style="color: var(--accent-blue); margin-bottom: 15px;">Recent Sales</h3>
+        <table style="font-size: 14px; width: 100%;">
+            <tr><th>Date</th><th>Customer</th><th>Stone</th><th>Size</th><th>Amount</th></tr>
+            {% for s in recent_sales %}
+            <tr>
+                <td>{{ s.invoice_date }}</td>
+                <td>{{ s.customer_id }}</td>
+                <td>{{ s.stone_type }}</td>
+                <td>{{ s.size }}</td>
+                <td>₹{{ "%.0f"|format(s.total_amount) }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const salesData = {{ sales_by_month|tojson }};
+const salaryData = {{ salary_by_month|tojson }};
+const customerData = {{ customer_sales|tojson }};
+const revenueData = {{ revenue_vs_expenses|tojson }};
+
+new Chart(document.getElementById('salesChart'), {
+    type: 'line',
+    data: {
+        labels: salesData.map(x => x[0] || 'N/A'),
+        datasets: [{
+            label: 'Sales (₹)',
+            data: salesData.map(x => x[1] || 0),
+            borderColor: '#00d4ff',
+            backgroundColor: 'rgba(0, 212, 255, 0.1)',
+            fill: true
+        }]
+    },
+    options: { responsive: true, plugins: { legend: { display: false } } }
+});
+
+new Chart(document.getElementById('salaryChart'), {
+    type: 'bar',
+    data: {
+        labels: salaryData.map(x => x[0] || 'N/A'),
+        datasets: [{
+            label: 'Salary (₹)',
+            data: salaryData.map(x => x[1] || 0),
+            backgroundColor: '#00d676'
+        }]
+    },
+    options: { responsive: true, plugins: { legend: { display: false } } }
+});
+
+new Chart(document.getElementById('revenueChart'), {
+    type: 'bar',
+    data: {
+        labels: revenueData.map(x => x.label),
+        datasets: [{
+            label: 'Amount (₹)',
+            data: revenueData.map(x => x.value),
+            backgroundColor: ['#00d676', '#ff4757']
+        }]
+    },
+    options: { responsive: true, plugins: { legend: { display: false } } }
+});
+
+new Chart(document.getElementById('customerChart'), {
+    type: 'doughnut',
+    data: {
+        labels: customerData.map(x => x.name),
+        datasets: [{
+            data: customerData.map(x => x.total),
+            backgroundColor: ['#00d4ff', '#00d676', '#ffa502', '#ff4757', '#a55eea']
+        }]
+    },
+    options: { responsive: true }
+});
+</script>
+
+<div style="margin-top: 30px;">
+    <a href="{{ url_for('payroll.employees') }}" class="btn">Payroll</a>
+    <a href="{{ url_for('sales.sales_list') }}" class="btn">Sales</a>
+    <a href="{{ url_for('inventory.index') }}" class="btn">Inventory</a>
+    <a href="{{ url_for('accounts.index') }}" class="btn">Accounts</a>
+    <a href="{{ url_for('reports.index') }}" class="btn">Reports</a>
+</div>
+{% endblock %}

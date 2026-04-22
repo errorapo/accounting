@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Employees{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Employees <a href="{{ url_for('payroll.add_employee') }}" class="btn" style="float: right;">Add Employee</a></h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Base Salary</th>
+                <th>Hourly Rate</th>
+                <th>PF Rate %</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for employee in employees %}
+            <tr>
+                <td>{{ employee.id }}</td>
+                <td>{{ employee.name }}</td>
+                <td>{{ employee.employee_type }}</td>
+                <td>₹{{ "%.2f"|format(employee.base_salary) }}</td>
+                <td>₹{{ "%.2f"|format(employee.hourly_rate) }}</td>
+                <td>{{ employee.pf_rate }}%</td>
+                <td class="actions">
+                    <a href="{{ url_for('payroll.edit_employee', id=employee.id) }}" class="btn">Edit</a>
+                    <a href="{{ url_for('payroll.delete_employee', id=employee.id) }}" class="btn btn-danger">Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

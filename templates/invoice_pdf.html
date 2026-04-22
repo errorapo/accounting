@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Invoice {{ sale.invoice_number }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; color: #000; }
+        .invoice-container { padding: 30px; }
+        .header { display: table; width: 100%; margin-bottom: 30px; }
+        .header-left, .header-right { width: 50%; vertical-align: top; }
+        .header-right { text-align: right; }
+        .company-name { font-size: 22px; font-weight: bold; color: #1a1a2e; }
+        .invoice-title { font-size: 18px; color: #333; margin-top: 5px; }
+        .bill-to { margin-bottom: 25px; }
+        .bill-to-title { font-size: 12px; color: #666; margin-bottom: 5px; }
+        .bill-to-name { font-weight: bold; font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background: #f0f0f0; font-size: 12px; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .totals { margin-left: auto; width: 250px; }
+        .totals td { border: none; padding: 4px 8px; }
+        .totals tr:last-child td { border-top: 1px solid #ccc; font-weight: bold; }
+        .footer { margin-top: 50px; text-align: center; font-size: 11px; color: #666; }
+        .payment-status { margin-top: 15px; font-size: 12px; }
+        .paid { color: green; }
+        .pending { color: #e67e22; }
+    </style>
+</head>
+<body>
+    <div class="invoice-container">
+        <table class="header">
+            <tr>
+                <td class="header-left">
+                    <div class="company-name">Rock Mining ERP</div>
+                    <div>GSTIN: 27AAAAA0000A1Z1</div>
+                    <div>123 Stone Lane, Mumbai, MH - 400001</div>
+                    <div>Phone: 9876543210</div>
+                </td>
+                <td class="header-right">
+                    <div class="invoice-title">TAX INVOICE</div>
+                    <div>Invoice #: {{ sale.invoice_number }}</div>
+                    <div>Date: {{ sale.invoice_date }}</div>
+                </td>
+            </tr>
+        </table>
+
+        <div class="bill-to">
+            <div class="bill-to-title">Bill To:</div>
+            <div class="bill-to-name">{{ sale.customer.name if sale.customer else 'N/A' }}</div>
+            <div>{{ sale.customer.address if sale.customer else '' }}</div>
+            <div>{{ sale.customer.phone if sale.customer else '' }}</div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th class="text-center">#</th>
+                    <th>Item Description</th>
+                    <th class="text-center">HSN Code</th>
+                    <th class="text-right">Qty</th>
+                    <th class="text-right">Rate</th>
+                    <th class="text-right">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="text-center">1</td>
+                    <td>{{ sale.stone_type }} - {{ sale.size }}</td>
+                    <td class="text-center">2517</td>
+                    <td class="text-right">{{ sale.quantity }} tons</td>
+                    <td class="text-right">Rs. {{ "%.2f"|format(sale.rate) }}</td>
+                    <td class="text-right">Rs. {{ "%.2f"|format(sale.amount) }}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <table class="totals">
+            <tr>
+                <td class="text-right">Subtotal:</td>
+                <td class="text-right">Rs. {{ "%.2f"|format(sale.amount) }}</td>
+            </tr>
+            <tr>
+                <td class="text-right">GST ({{ sale.gst_rate }}%):</td>
+                <td class="text-right">Rs. {{ "%.2f"|format(sale.gst_amount) }}</td>
+            </tr>
+            <tr>
+                <td class="text-right"><strong>Grand Total:</strong></td>
+                <td class="text-right"><strong>Rs. {{ "%.2f"|format(sale.total_amount) }}</strong></td>
+            </tr>
+        </table>
+
+        <div class="payment-status">
+            <strong>Payment Status:</strong>
+            <span class="{% if sale.payment_status == 'paid' %}paid{% else %}pending{% endif %}">
+                {{ sale.payment_status|upper }}
+            </span>
+            |
+            <strong>Payment Method:</strong> {{ sale.payment_type|title }}
+        </div>
+
+        <div class="footer">
+            <p>Thank you for your business!</p>
+            <p>This is a computer-generated invoice. No signature required.</p>
+        </div>
+    </div>
+</body>
+</html>

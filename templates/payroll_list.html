@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Payroll List{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Payroll Records</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Employee</th>
+                <th>Month/Year</th>
+                <th>Gross Salary</th>
+                <th>PF</th>
+                <th>Net Salary</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in payrolls %}
+            <tr>
+                <td>{{ p.id }}</td>
+                <td>{{ p.employee.name if p.employee else p.employee_id }}</td>
+                <td>{{ p.month }}/{{ p.year }}</td>
+                <td>₹{{ "%.2f"|format(p.gross_salary) }}</td>
+                <td>₹{{ "%.2f"|format(p.pf_employee + p.pf_employer) }}</td>
+                <td>₹{{ "%.2f"|format(p.net_salary) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Add Account{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Add Account</h2>
+    <form method="POST">
+        <div class="form-group">
+            <label>Account Name</label>
+            <input type="text" name="name" required>
+        </div>
+        <div class="form-group">
+            <label>Account Type</label>
+            <select name="account_type" required>
+                <option value="">Select Type</option>
+                <option value="asset">Asset</option>
+                <option value="liability">Liability</option>
+                <option value="capital">Capital</option>
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-success">Add Account</button>
+        <a href="{{ url_for('accounts.index') }}" class="btn">Cancel</a>
+    </form>
+</div>
+{% endblock %}

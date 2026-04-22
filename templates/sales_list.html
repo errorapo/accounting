@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Sales{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Sales <a href="{{ url_for('sales.create_sale') }}" class="btn" style="float: right;">New Sale</a></h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Invoice #</th>
+                <th>Date</th>
+                <th>Customer</th>
+                <th>Stone Type</th>
+                <th>Size</th>
+                <th>Quantity</th>
+                <th>Amount</th>
+                <th>GST</th>
+                <th>Total</th>
+                <th>Paid</th>
+                <th>Payment</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sale in sales_records %}
+            <tr>
+                <td>{{ sale.invoice_number or sale.id }}</td>
+                <td>{{ sale.invoice_date }}</td>
+                <td>{{ sale.customer.name if sale.customer else sale.customer_id }}</td>
+                <td>{{ sale.stone_type }}</td>
+                <td>{{ sale.size }}</td>
+                <td>{{ sale.quantity }}</td>
+                <td>₹{{ "%.2f"|format(sale.amount) }}</td>
+                <td>₹{{ "%.2f"|format(sale.gst_amount) }}</td>
+                <td>₹{{ "%.2f"|format(sale.total_amount) }}</td>
+                <td>₹{{ "%.2f"|format(sale.payments|sum(attribute='amount') if sale.payments else 0) }}</td>
+                <td>{{ sale.payment_type }}</td>
+                <td>
+                    {% if sale.payment_status == 'paid' %}
+                    <span style="color: green;">Paid</span>
+                    {% else %}
+                    <span style="color: orange;">Pending</span>
+                    <a href="{{ url_for('sales.add_payment', id=sale.id) }}">Record Payment</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

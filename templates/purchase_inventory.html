@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Purchase Inventory{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Add Purchase - {{ item.stone_type }} ({{ item.size }})</h2>
+    <form method="POST">
+        <div class="form-group">
+            <label>Quantity (tons)</label>
+            <input type="number" name="quantity" step="0.01" required>
+        </div>
+        <button type="submit" class="btn btn-success">Add Purchase</button>
+        <a href="{{ url_for('inventory.index') }}" class="btn">Cancel</a>
+    </form>
+</div>
+{% endblock %}

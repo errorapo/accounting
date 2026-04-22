@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Rock Mining ERP</title>
+    <style>
+        :root {
+            --bg-dark: #0f0f1a;
+            --bg-card: #1a1a2e;
+            --bg-header: #16213e;
+            --accent-blue: #00d4ff;
+            --accent-blue-dim: #0f3460;
+            --text-light: #e0e0e0;
+            --danger: #ff4757;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Arial, sans-serif; 
+            background: linear-gradient(135deg, var(--bg-dark), var(--bg-header)); 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh;
+        }
+        .login-box { 
+            background: var(--bg-card); 
+            padding: 40px; 
+            border-radius: 15px; 
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5), inset 0 0 0 1px var(--accent-blue-dim);
+            width: 350px;
+        }
+        h1 { 
+            color: var(--accent-blue); 
+            text-align: center; 
+            margin-bottom: 30px; 
+            text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+            font-size: 28px;
+        }
+        .form-group { margin-bottom: 20px; }
+        label { 
+            display: block; 
+            margin-bottom: 8px; 
+            font-weight: bold; 
+            color: var(--accent-blue);
+            font-size: 14px;
+        }
+        input { 
+            width: 100%; 
+            padding: 14px; 
+            border: 1px solid var(--accent-blue-dim); 
+            border-radius: 8px; 
+            background: var(--bg-dark);
+            color: var(--text-light);
+            font-size: 16px;
+        }
+        input:focus { 
+            outline: none; 
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
+        }
+        button { 
+            width: 100%; 
+            padding: 14px; 
+            background: linear-gradient(135deg, var(--accent-blue), #0099cc); 
+            color: var(--bg-dark); 
+            border: none; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-size: 16px; 
+            font-weight: bold;
+            transition: all 0.3s;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
+        }
+        button:hover { 
+            background: linear-gradient(135deg, #00e5ff, #00d4ff); 
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.6);
+            transform: translateY(-2px);
+        }
+        .flash { padding: 12px; margin-bottom: 15px; border-radius: 5px; }
+        .flash.error { 
+            background: rgba(255, 71, 87, 0.2); 
+            color: var(--danger); 
+            border: 1px solid var(--danger); 
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h1>Rock Mining ERP</h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        <form method="POST">
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" name="username" required>
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" name="password" required>
+            </div>
+            <button type="submit">Login</button>
+        </form>
+    </div>
+</body>
+</html>

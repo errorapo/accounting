@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Edit Employee{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Edit Employee</h2>
+    <form method="POST">
+        <div class="form-group">
+            <label>Name</label>
+            <input type="text" name="name" value="{{ employee.name }}" required>
+        </div>
+        <div class="form-group">
+            <label>Employee Type</label>
+            <select name="employee_type" required>
+                <option value="Driver" {% if employee.employee_type == 'Driver' %}selected{% endif %}>Driver</option>
+                <option value="Machine Operator" {% if employee.employee_type == 'Machine Operator' %}selected{% endif %}>Machine Operator</option>
+                <option value="Manual Labour" {% if employee.employee_type == 'Manual Labour' %}selected{% endif %}>Manual Labour</option>
+                <option value="Supervisor" {% if employee.employee_type == 'Supervisor' %}selected{% endif %}>Supervisor</option>
+                <option value="Office Staff" {% if employee.employee_type == 'Office Staff' %}selected{% endif %}>Office Staff</option>
+                <option value="Security" {% if employee.employee_type == 'Security' %}selected{% endif %}>Security</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Base Salary</label>
+            <input type="number" name="base_salary" step="0.01" value="{{ employee.base_salary }}">
+        </div>
+        <div class="form-group">
+            <label>Hourly Rate</label>
+            <input type="number" name="hourly_rate" step="0.01" value="{{ employee.hourly_rate }}">
+        </div>
+        <div class="form-group">
+            <label>PF Rate %</label>
+            <input type="number" name="pf_rate" step="0.01" value="{{ employee.pf_rate }}">
+        </div>
+        <div class="form-group">
+            <label>Transport Allowance</label>
+            <input type="number" name="transport_allowance" step="0.01" value="{{ employee.transport_allowance }}">
+        </div>
+        <div class="form-group">
+            <label>Food Allowance</label>
+            <input type="number" name="food_allowance" step="0.01" value="{{ employee.food_allowance }}">
+        </div>
+        <div class="form-group">
+            <label>Housing Allowance</label>
+            <input type="number" name="housing_allowance" step="0.01" value="{{ employee.housing_allowance }}">
+        </div>
+        <button type="submit" class="btn btn-success">Update Employee</button>
+        <a href="{{ url_for('payroll.employees') }}" class="btn">Cancel</a>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Add Overtime{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Add Overtime Hours</h2>
+    <form method="POST">
+        <div class="form-group">
+            <label>Overtime Hours</label>
+            <input type="number" name="hours" step="0.5" value="{{ hours }}" min="0" required>
+            <p style="color: var(--text-muted); margin-top: 5px;">Overtime is paid at 1.5x rate</p>
+        </div>
+        <button type="submit" class="btn btn-success">Save Overtime</button>
+        <a href="{{ url_for('payroll.attendance') }}" class="btn">Cancel</a>
+    </form>
+</div>
+{% endblock %}

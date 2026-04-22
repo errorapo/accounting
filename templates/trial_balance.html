@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Trial Balance{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Trial Balance</h2>
+    <p style="color: #666; margin-bottom: 15px;">As of: {{ as_of_date }}</p>
+    <form method="get" style="margin-bottom: 20px;">
+        <label>As of Date: </label>
+        <input type="date" name="date" value="{{ as_of_date }}">
+        <button type="submit" class="btn">Generate</button>
+    </form>
+    <table>
+        <thead>
+            <tr>
+                <th>Account</th>
+                <th>Type</th>
+                <th>Debit (₹)</th>
+                <th>Credit (₹)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in data %}
+            <tr>
+                <td>{{ row.account }}</td>
+                <td>{{ row.account_type }}</td>
+                <td>{{ "%.2f"|format(row.debit) if row.debit > 0 else '-' }}</td>
+                <td>{{ "%.2f"|format(row.credit) if row.credit > 0 else '-' }}</td>
+            </tr>
+            {% endfor %}
+            <tr style="font-weight: bold; background: #f5f5f5;">
+                <td colspan="2">Total</td>
+                <td>₹{{ "%.2f"|format(total_dr) }}</td>
+                <td>₹{{ "%.2f"|format(total_cr) }}</td>
+            </tr>
+        </tbody>
+    </table>
+    {% if is_balanced %}
+    <p style="color: green; margin-top: 10px;">✓ Trial Balance is balanced</p>
+    {% else %}
+    <p style="color: red; margin-top: 10px;">⚠ Trial Balance is NOT balanced!</p>
+    {% endif %}
+    <a href="{{ url_for('reports.index') }}" class="btn" style="margin-top: 15px;">Back to Reports</a>
+</div>
+{% endblock %}

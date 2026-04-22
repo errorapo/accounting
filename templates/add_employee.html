@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Add Employee{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Add New Employee</h2>
+    <form method="POST">
+        <div class="form-group">
+            <label>Name</label>
+            <input type="text" name="name" required>
+        </div>
+        <div class="form-group">
+            <label>Employee Type</label>
+            <select name="employee_type" required>
+                <option value="">Select Type</option>
+                <option value="Driver">Driver</option>
+                <option value="Machine Operator">Machine Operator</option>
+                <option value="Manual Labour">Manual Labour</option>
+                <option value="Supervisor">Supervisor</option>
+                <option value="Office Staff">Office Staff</option>
+                <option value="Security">Security</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Base Salary</label>
+            <input type="number" name="base_salary" step="0.01" value="0">
+        </div>
+        <div class="form-group">
+            <label>Hourly Rate</label>
+            <input type="number" name="hourly_rate" step="0.01" value="0">
+        </div>
+        <div class="form-group">
+            <label>PF Rate %</label>
+            <input type="number" name="pf_rate" step="0.01" value="12">
+        </div>
+        <div class="form-group">
+            <label>Transport Allowance</label>
+            <input type="number" name="transport_allowance" step="0.01" value="0">
+        </div>
+        <div class="form-group">
+            <label>Food Allowance</label>
+            <input type="number" name="food_allowance" step="0.01" value="0">
+        </div>
+        <div class="form-group">
+            <label>Housing Allowance</label>
+            <input type="number" name="housing_allowance" step="0.01" value="0">
+        </div>
+        <button type="submit" class="btn btn-success">Add Employee</button>
+        <a href="{{ url_for('payroll.employees') }}" class="btn">Cancel</a>
+    </form>
+</div>
+{% endblock %}

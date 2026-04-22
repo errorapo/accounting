@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Opening Balances{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Opening Balances</h2>
+    <p>Enter your existing balances when starting the system mid-year. These will be dated as of the date you select.</p>
+    <form method="POST">
+        <div class="form-group">
+            <label>Balance Date</label>
+            <input type="date" name="balance_date" value="{{ date.today() }}" required>
+        </div>
+
+        <h3>Assets (What you Own)</h3>
+        <div class="form-group">
+            <label>Cash in Hand</label>
+            <input type="number" name="cash" step="0.01" value="0">
+        </div>
+        <div class="form-group">
+            <label>Cash in Bank</label>
+            <input type="number" name="bank" step="0.01" value="0">
+        </div>
+        <div class="form-group">
+            <label>Accounts Receivable (Customers owe you)</label>
+            <input type="number" name="receivables" step="0.01" value="0">
+        </div>
+        <div class="form-group">
+            <label>Inventory Value</label>
+            <input type="number" name="inventory" step="0.01" value="0">
+        </div>
+
+        <h3>Liabilities (What you Owe)</h3>
+        <div class="form-group">
+            <label>Accounts Payable (You owe suppliers)</label>
+            <input type="number" name="payables" step="0.01" value="0">
+        </div>
+        <div class="form-group">
+            <label>Loans Outstanding</label>
+            <input type="number" name="loans" step="0.01" value="0">
+        </div>
+
+        <h3>Capital</h3>
+        <div class="form-group">
+            <label>Owner's Capital (Net Worth - assets minus liabilities)</label>
+            <input type="number" name="capital" step="0.01" value="0">
+            <small style="color: var(--text-muted);">Note: If you entered assets above, do NOT add that amount here. Capital = your net investment.</small>
+        </div>
+
+        <button type="submit" class="btn btn-success">Set Opening Balances</button>
+    </form>
+</div>
+{% endblock %}

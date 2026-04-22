@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Financial Reports</h2>
+    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+        <a href="{{ url_for('reports.trial_balance') }}" class="btn">Trial Balance</a>
+        <a href="{{ url_for('reports.profit_loss') }}" class="btn">Profit & Loss</a>
+        <a href="{{ url_for('reports.balance_sheet') }}" class="btn">Balance Sheet</a>
+        <a href="{{ url_for('reports.gst_report') }}" class="btn">GST Report</a>
+        <a href="{{ url_for('reports.payroll_summary') }}" class="btn">Payroll Summary</a>
+    </div>
+</div>
+{% endblock %}
