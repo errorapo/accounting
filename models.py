@@ -172,3 +172,8 @@ class JournalEntry(db.Model):
     is_reversal = db.Column(db.Boolean, default=False)
     original_entry_id = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class InvoiceSequence(db.Model):
+    id          = db.Column(db.Integer, primary_key=True)
+    prefix      = db.Column(db.String(20), unique=True, nullable=False)
+    last_number = db.Column(db.Integer, default=0, nullable=False)

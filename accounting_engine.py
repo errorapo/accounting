@@ -134,6 +134,36 @@ def create_journal_entry(date, description, debit_account_id, credit_account_id,
     db.session.commit()
     return journal
 
+def create_journal_entry_no_commit(date, description, debit_account_id, credit_account_id, amount):
+    if amount <= 0:
+        raise ValueError("Amount must be positive")
+
+    journal = JournalEntry(
+        date=date,
+        description=description,
+        debit_account_id=debit_account_id,
+        credit_account_id=credit_account_id,
+        amount=amount,
+        is_posted=True
+    )
+    db.session.add(journal)
+    db.session.flush()
+
+    db.session.add(Transaction(
+        date=date, description=description,
+        account_id=debit_account_id,
+        debit=amount, credit=0, entry_type='debit',
+        is_posted=True, original_entry_id=journal.id
+    ))
+    db.session.add(Transaction(
+        date=date, description=description,
+        account_id=credit_account_id,
+        debit=0, credit=amount, entry_type='credit',
+        is_posted=True, original_entry_id=journal.id
+    ))
+    return journal
+
+
 def reverse_journal_entry(entry_id, reversal_date=None, reversal_reason=""):
     """Reverse a posted journal entry.
     
@@ -282,8 +312,10 @@ def get_balance_sheet(as_of_date=None):
     
     for acc_type in ['asset', 'liability', 'capital']:
         accounts = Account.query.filter_by(account_type=acc_type, is_active=True).all()
-        
+
         for account in accounts:
+            if acc_type == 'capital' and account.name == 'Retained Earnings':
+                continue
             balance = get_account_balance(account.id, report_date)
             if balance != 0:
                 if acc_type == 'asset':
@@ -461,19 +493,16 @@ def record_purchase(date, vendor_name, amount, gst_amount, itc_eligible=True, pa
         desc = f"Purchase (Cash) - {vendor_name} - {description}"
 
     if itc_eligible and gst_amount > 0:
-        # ITC purchase: Single entry for total including GST
-        # The ITC is tracked via GST Receivable account but NO separate journal entry
-        # The GST report will use (GST Payable - GST Receivable) to calculate net
         if item and item.rate_per_ton > 0:
             inventory_acc = get_or_create_account('Inventory', 'asset')
-            create_journal_entry(date, desc, inventory_acc.id, credit_account.id, amount + gst_amount)
+            create_journal_entry(date, desc, inventory_acc.id, credit_account.id, amount)
         else:
             purchases_acc = get_or_create_account('Purchases', 'expense')
-            create_journal_entry(date, desc, purchases_acc.id, credit_account.id, amount + gst_amount)
+            create_journal_entry(date, desc, purchases_acc.id, credit_account.id, amount)
 
-        # Ensure GST Receivable exists (for balance sheet display)
-        get_or_create_account('GST Receivable', 'asset')
-        get_or_create_account('GST Payable', 'liability')
+        gst_recv_acc = get_or_create_account('GST Receivable', 'asset')
+        gst_itc_desc = f"ITC GST - {description}"
+        create_journal_entry(date, gst_itc_desc, gst_recv_acc.id, credit_account.id, gst_amount)
     elif is_inventory_purchase and item and item.rate_per_ton > 0:
         # Non-ITC but inventory-tracked: GST added to inventory cost
         inventory_acc = get_or_create_account('Inventory', 'asset')

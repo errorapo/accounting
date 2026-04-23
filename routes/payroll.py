@@ -3,6 +3,20 @@ from routes.dashboard import login_required
 from ext import db
 from models import Employee, Payroll, Attendance
 from datetime import datetime
+from validators import parse_non_negative_float
+
+def admin_required(f):
+    from functools import wraps
+    from flask import session, flash, redirect, url_for
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('auth.login'))
+        if session.get('role') != 'admin':
+            flash('Admin access required', 'error')
+            return redirect(url_for('dashboard.index'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 bp = Blueprint('payroll', __name__)
 
@@ -14,6 +28,7 @@ def employees():
 
 @bp.route('/employees/add', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def add_employee():
     if request.method == 'POST':
         employee = Employee(
@@ -34,6 +49,7 @@ def add_employee():
 
 @bp.route('/employees/edit/<int:id>', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def edit_employee(id):
     employee = Employee.query.get_or_404(id)
     if request.method == 'POST':
@@ -52,6 +68,7 @@ def edit_employee(id):
 
 @bp.route('/employees/delete/<int:id>')
 @login_required
+@admin_required
 def delete_employee(id):
     employee = Employee.query.get_or_404(id)
     employee.is_active = False
@@ -69,9 +86,13 @@ def create_payroll():
         employee_id = int(request.form.get('employee_id'))
         employee = Employee.query.get(employee_id)
         
-        overtime_hours = float(request.form.get('overtime_hours', 0))
-        bonus = float(request.form.get('bonus', 0))
-        insurance = float(request.form.get('insurance', 0))
+        try:
+            overtime_hours = parse_non_negative_float(request.form.get('overtime_hours', 0), 'Overtime hours')
+            bonus          = parse_non_negative_float(request.form.get('bonus', 0), 'Bonus')
+            insurance      = parse_non_negative_float(request.form.get('insurance', 0), 'Insurance')
+        except ValueError as e:
+            flash(str(e), 'error')
+            return render_template('create_payroll.html', employees=employees)
         
         overtime_amount = overtime_hours * employee.hourly_rate * 1.5
         gross_salary = (employee.base_salary + overtime_amount + 
@@ -197,6 +218,7 @@ def add_overtime(id):
 
 @bp.route('/payroll/generate')
 @login_required
+@admin_required
 def generate_payroll():
     from datetime import date
 

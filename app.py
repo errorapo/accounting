@@ -15,16 +15,20 @@ def create_app(config_name=None):
         config_name = os.environ.get('FLASK_ENV', 'development')
     
     app = Flask(__name__)
-    app.config.from_object(config.get(config_name, config['development']))
+    cfg = config.get(config_name, config['development'])
+    app.config.from_object(cfg)
+    if hasattr(cfg, 'init_app'):
+        cfg.init_app(app)
     
     csrf = CSRFProtect(app)
     db.init_app(app)
     
+    redis_url = os.environ.get('REDIS_URL', 'memory://')
     limiter = Limiter(
         get_remote_address,
         app=app,
         default_limits=["200 per day", "50 per hour"],
-        storage_uri="memory://"
+        storage_uri=redis_url
     )
     
     @app.after_request

@@ -1,25 +1,39 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file
 from routes.dashboard import login_required
 from ext import db
-from models import Customer, Sales, Inventory, Account, Payment
+from models import Customer, Sales, Inventory, Account, Payment, InvoiceSequence
 from datetime import datetime, date
+from decimal import Decimal
 
-from accounting_engine import record_sale, record_payment
+from sqlalchemy import select
+from accounting_engine import record_sale, record_payment, get_or_create_account, create_journal_entry_no_commit
+from validators import parse_positive_float, parse_non_negative_float, parse_gst_rate
+
+def admin_required(f):
+    from functools import wraps
+    from flask import session, flash, redirect, url_for
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('auth.login'))
+        if session.get('role') != 'admin':
+            flash('Admin access required', 'error')
+            return redirect(url_for('dashboard.index'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 bp = Blueprint('sales', __name__)
 
 def generate_invoice_number():
-    """Generate sequential invoice number."""
-    last_sale = Sales.query.order_by(Sales.id.desc()).first()
-    if last_sale and last_sale.invoice_number:
-        try:
-            last_num = int(last_sale.invoice_number.split('-')[-1])
-            next_num = last_num + 1
-        except:
-            next_num = 1
-    else:
-        next_num = 1
-    return f"INV-{date.today().year}-{next_num:05d}"
+    """Generate sequential invoice number with row-level locking to prevent race conditions."""
+    prefix = f"INV-{date.today().year}"
+    row = db.session.query(InvoiceSequence).filter_by(prefix=prefix).with_for_update().first()
+    if row is None:
+        row = InvoiceSequence(prefix=prefix, last_number=0)
+        db.session.add(row)
+        db.session.flush()
+    row.last_number += 1
+    return f"{prefix}-{row.last_number:05d}"
 
 @bp.route('/customers')
 @login_required
@@ -77,18 +91,44 @@ def create_sale():
         customer_id = int(customer_id)
         stone_type = request.form.get('stone_type')
         size = request.form.get('size')
-        quantity = float(request.form.get('quantity', 0))
-        rate = float(request.form.get('rate', 0))
-        gst_rate = float(request.form.get('gst_rate', 5))
         payment_type = request.form.get('payment_type', 'cash')
+
+        if not stone_type or not size:
+            flash('Please select a stone type and size', 'error')
+            return render_template('create_sale.html', customers=customers, inventory=inventory)
+
+        if payment_type not in ('cash', 'credit'):
+            flash('Invalid payment type', 'error')
+            return render_template('create_sale.html', customers=customers, inventory=inventory)
+
+        try:
+            quantity = parse_positive_float(request.form.get('quantity'), 'Quantity')
+            rate     = parse_positive_float(request.form.get('rate'), 'Rate')
+            gst_rate = parse_gst_rate(request.form.get('gst_rate', 5))
+        except ValueError as e:
+            flash(str(e), 'error')
+            return render_template('create_sale.html', customers=customers, inventory=inventory)
+
+        item = Inventory.query.filter_by(stone_type=stone_type, size=size).first()
+        if item is None:
+            flash(f'Inventory item not found: {stone_type} {size}', 'error')
+            return render_template('create_sale.html', customers=customers, inventory=inventory)
+
+        if item.closing_stock < quantity:
+            flash(
+                f'Insufficient stock. Available: {float(item.closing_stock):.3f} tons, '
+                f'Requested: {quantity:.3f} tons',
+                'error'
+            )
+            return render_template('create_sale.html', customers=customers, inventory=inventory)
         
-        amount = quantity * rate
-        gst_amount = amount * (gst_rate / 100)
+        amount = Decimal(str(quantity)) * Decimal(str(rate))
+        gst_amount = amount * Decimal(str(gst_rate)) / Decimal('100')
         total_amount = amount + gst_amount
-        
+
         # Determine payment status based on payment type
         payment_status = 'paid' if payment_type == 'cash' else 'pending'
-        
+
         sale = Sales(
             invoice_number=generate_invoice_number(),
             customer_id=customer_id,
@@ -107,12 +147,32 @@ def create_sale():
         db.session.add(sale)
         db.session.flush()
 
-        item = Inventory.query.filter_by(stone_type=stone_type, size=size).first()
+        item = Inventory.query.filter_by(stone_type=stone_type, size=size).with_for_update().first()
         if item:
-            item.sales += quantity
+            item.sales += Decimal(str(quantity))
             item.closing_stock = item.opening_stock + item.purchases - item.sales
 
-        record_sale(date.today(), f"INV-{sale.id}", amount, gst_amount, payment_type, f"{stone_type} {size}", quantity, stone_type, size)
+        # Atomic journal entries (no commit inside)
+        sales_acc = get_or_create_account('Sales Revenue', 'income')
+        gst_payable_acc = get_or_create_account('GST Payable', 'liability')
+
+        if payment_type == 'credit':
+            receivable_acc = get_or_create_account('Accounts Receivable', 'asset')
+            debit_account = receivable_acc
+        else:
+            cash_acc = get_or_create_account('Cash', 'asset')
+            debit_account = cash_acc
+
+        create_journal_entry_no_commit(date.today(), f"Sale - {stone_type} {size}", debit_account.id, sales_acc.id, amount)
+
+        if gst_amount > 0:
+            create_journal_entry_no_commit(date.today(), f"GST Collected - {stone_type} {size}", debit_account.id, gst_payable_acc.id, gst_amount)
+
+        if quantity > 0 and item and item.rate_per_ton > 0:
+            cogs_acc = get_or_create_account('COGS', 'expense')
+            inventory_acc = get_or_create_account('Inventory', 'asset')
+            cogs_amount = Decimal(str(quantity)) * item.rate_per_ton
+            create_journal_entry_no_commit(date.today(), f"COGS - {stone_type} {size}", cogs_acc.id, inventory_acc.id, cogs_amount)
 
         db.session.commit()
         flash(f'Sale created successfully - Invoice: {sale.invoice_number}', 'success')

@@ -6,6 +6,19 @@ from datetime import datetime, date
 from accounting_engine import create_journal_entry, reverse_journal_entry, get_or_create_account
 from models import Transaction
 
+def admin_required(f):
+    from functools import wraps
+    from flask import session, flash, redirect, url_for
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('auth.login'))
+        if session.get('role') != 'admin':
+            flash('Admin access required', 'error')
+            return redirect(url_for('dashboard.index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 bp = Blueprint('accounts', __name__)
 
 @bp.route('/accounts')
@@ -67,6 +80,7 @@ def add_journal():
 
 @bp.route('/journal/reverse/<int:id>', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def reverse_journal(id):
     journal = JournalEntry.query.get_or_404(id)
     
@@ -91,6 +105,7 @@ def reverse_journal(id):
 
 @bp.route('/opening-balances', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def opening_balances():
     existing = Transaction.query.filter(Transaction.description.like('Opening Balance%')).first()
     if existing and request.method == 'GET':

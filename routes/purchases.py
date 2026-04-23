@@ -4,6 +4,7 @@ from ext import db
 from models import Purchase, Inventory, Account, PurchasePayment
 from datetime import datetime, date
 from accounting_engine import record_purchase, record_purchase_payment, create_journal_entry, get_or_create_account
+from validators import parse_positive_float, parse_non_negative_float, parse_gst_rate
 
 bp = Blueprint('purchases', __name__)
 
@@ -38,9 +39,13 @@ def create_purchase():
         payment_type = request.form.get('payment_type', 'cash')
         stone_type = request.form.get('stone_type')
         size = request.form.get('size')
-        quantity = float(request.form.get('quantity', 0))
-        rate = float(request.form.get('rate', 0))
-        gst_rate = float(request.form.get('gst_rate', 5))
+        try:
+            quantity = parse_positive_float(request.form.get('quantity'), 'Quantity')
+            rate     = parse_positive_float(request.form.get('rate'), 'Rate')
+            gst_rate = parse_gst_rate(request.form.get('gst_rate', 5))
+        except ValueError as e:
+            flash(str(e), 'error')
+            return render_template('create_purchase.html', inventory=inventory, vendors=vendors)
         itc_eligible = request.form.get('itc_eligible') == '1'
 
         if vendor_id:

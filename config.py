@@ -31,10 +31,20 @@ class ProductionConfig(Config):
     DEBUG = False
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
     SESSION_COOKIE_SECURE = True
-    
-    @staticmethod
-    def init_app(app):
-        pass
+
+    @classmethod
+    def init_app(cls, app):
+        db_url = os.environ.get('DATABASE_URL')
+        if not db_url:
+            raise ValueError("DATABASE_URL must be set in production environment")
+
+        admin_pass = os.environ.get('ADMIN_PASSWORD', '')
+        accountant_pass = os.environ.get('ACCOUNTANT_PASSWORD', '')
+
+        if admin_pass in ('', 'admin123', 'admin', 'password'):
+            raise ValueError("ADMIN_PASSWORD is weak or default — set a strong password in .env")
+        if accountant_pass in ('', 'accountant123', 'accountant', 'password'):
+            raise ValueError("ACCOUNTANT_PASSWORD is weak or default — set a strong password in .env")
 
 class TestingConfig(Config):
     TESTING = True
