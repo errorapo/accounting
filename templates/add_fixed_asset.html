@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Add Fixed Asset{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Add Fixed Asset</h2>
+    <form method="POST">
+        <div class="form-group">
+            <label>Asset Name</label>
+            <input type="text" name="name" required placeholder="e.g., Office Building, Computer, Vehicle">
+        </div>
+        <div class="form-group">
+            <label>Purchase Date</label>
+            <input type="date" name="purchase_date" required>
+        </div>
+        <div class="form-group">
+            <label>Cost (₹)</label>
+            <input type="number" name="cost" step="0.01" required min="0">
+        </div>
+        <div class="form-group">
+            <label>Salvage Value (₹)</label>
+            <input type="number" name="salvage_value" step="0.01" value="0" min="0">
+            <small style="color: var(--text-muted);">Estimated value at end of useful life</small>
+        </div>
+        <div class="form-group">
+            <label>Useful Life (Years)</label>
+            <input type="number" name="useful_life_years" required min="1" placeholder="e.g., 5, 10, 15">
+        </div>
+        <button type="submit" class="btn btn-success">Add Asset</button>
+    </form>
+    <a href="{{ url_for('accounts.fixed_assets') }}" class="btn" style="margin-top: 15px;">Cancel</a>
+</div>
+{% endblock %}

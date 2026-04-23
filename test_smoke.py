@@ -3,30 +3,41 @@
 import os
 import sys
 
-# Ensure project root is on path
+# Set environment BEFORE any imports
+os.environ['REDIS_URL'] = 'memory://'
+os.environ['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+os.environ['SKIP_INIT_DEFAULT_DATA'] = 'true'
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Force memory:// for rate limiter before any app imports
-os.environ['REDIS_URL'] = 'memory://'
-
+from werkzeug.security import generate_password_hash
 from app import create_app, init_default_data
 from ext import db
-from models import User, Inventory, Sales, InvoiceSequence
+from models import User, Inventory, Sales, InvoiceSequence, Customer, Account, Transaction, JournalEntry
+from accounting_engine import get_trial_balance
 
 
 def run_tests():
     app = create_app('development')
     app.config['TESTING'] = True
     app.config['WTF_CSRF_ENABLED'] = False
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
 
     results = []
+
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        init_default_data()
 
     # ── Test 1: App starts without errors ──────────────────────────────────────
     try:
         with app.app_context():
-            db.create_all()
-            init_default_data()
+            user = User.query.filter_by(username='admin').first()
+            customer = Customer.query.first()
+            if customer is None:
+                customer = Customer(name='Test Customer', phone='9999999999')
+                db.session.add(customer)
+                db.session.commit()
         results.append(("App starts without errors", True))
     except Exception as e:
         results.append(("App starts without errors", False, str(e)))
@@ -35,7 +46,6 @@ def run_tests():
     try:
         client = app.test_client()
         with app.app_context():
-            # Login first
             user = User.query.filter_by(username='admin').first()
             if user is None:
                 user = User(username='admin',
@@ -59,20 +69,19 @@ def run_tests():
     try:
         client = app.test_client()
         with app.app_context():
-            db.create_all()
-            init_default_data()
+            db.session.rollback()
 
-            # Get a valid item from inventory
             item = Inventory.query.first()
             if item is None:
                 item = Inventory(stone_type='Granite', size='20mm',
                                  opening_stock=100, purchases=0, sales=0,
-                                 closing_stock=100, rate_per_ton=1200)
+                                 closing_stock=100, rate_per_ton=1200,
+                                 total_cost=0)
                 db.session.add(item)
                 db.session.commit()
 
             user = User.query.filter_by(username='admin').first()
-            customer = db.session.query(Customer).first()
+            customer = Customer.query.first()
             if customer is None:
                 customer = Customer(name='Test Customer', phone='9999999999')
                 db.session.add(customer)
@@ -93,9 +102,9 @@ def run_tests():
         }, follow_redirects=False)
 
         with app.app_context():
-            bad_sale = Sales.query.filter_by(quantity=float(-5)).first()
+            db.session.rollback()
+            bad_sale = Sales.query.first()
 
-        # Check that either the HTTP response rejected it, OR the DB has no bad sale
         rejected = response.status_code in (302, 400, 500) or \
                 b'error' in response.data.lower() or \
                 b'must be greater' in response.data.lower() or \
@@ -103,7 +112,7 @@ def run_tests():
         passed = rejected and bad_sale is None
 
         results.append(("Sale cannot be created with negative quantity", passed,
-                        f"Sale with qty=-5 was created (id={bad_sale.id})" if bad_sale else ""))
+                        f"Sale with qty=-5 was created" if bad_sale else ""))
     except Exception as e:
         results.append(("Sale cannot be created with negative quantity",
                         False, str(e)))
@@ -112,21 +121,17 @@ def run_tests():
     try:
         client = app.test_client()
         with app.app_context():
-            db.create_all()
+            db.session.rollback()
 
-            # Create item with known closing stock
             item = Inventory(stone_type='Limestone', size='10mm',
                              opening_stock=10, purchases=0, sales=0,
-                             closing_stock=10, rate_per_ton=800)
+                             closing_stock=10, rate_per_ton=800,
+                             total_cost=0)
             db.session.add(item)
             db.session.commit()
 
             user = User.query.filter_by(username='admin').first()
-            customer = db.session.query(Customer).first()
-            if customer is None:
-                customer = Customer(name='Test Customer', phone='9999999999')
-                db.session.add(customer)
-                db.session.commit()
+            customer = Customer.query.first()
 
         with client.session_transaction() as sess:
             sess['user_id'] = user.id
@@ -143,8 +148,8 @@ def run_tests():
         }, follow_redirects=False)
 
         with app.app_context():
-            # Verify the large sale was NOT committed
-            large_sale = Sales.query.filter_by(quantity=float(9999)).first()
+            db.session.rollback()
+            large_sale = Sales.query.first()
 
         rejected = response.status_code in (302, 400, 500) or \
                 b'error' in response.data.lower() or \
@@ -154,7 +159,7 @@ def run_tests():
 
         results.append(("Sale cannot be created with quantity exceeding stock",
                         passed,
-                        f"Sale with qty=9999 was created (id={large_sale.id})" if large_sale else ""))
+                        f"Sale with qty=9999 was created" if large_sale else ""))
     except Exception as e:
         results.append(("Sale cannot be created with quantity exceeding stock",
                         False, str(e)))
@@ -163,12 +168,10 @@ def run_tests():
     try:
         client = app.test_client()
         with app.app_context():
-            db.drop_all()
-            db.create_all()
-            init_default_data()
+            db.session.rollback()
 
             user = User.query.filter_by(username='admin').first()
-            customer = db.session.query(Customer).first()
+            customer = Customer.query.first()
             if customer is None:
                 customer = Customer(name='Test Customer', phone='9999999999')
                 db.session.add(customer)
@@ -178,7 +181,8 @@ def run_tests():
             if item is None:
                 item = Inventory(stone_type='Granite', size='20mm',
                                  opening_stock=1000, purchases=0, sales=0,
-                                 closing_stock=1000, rate_per_ton=1200)
+                                 closing_stock=1000, rate_per_ton=1200,
+                                 total_cost=0)
                 db.session.add(item)
                 db.session.commit()
 
@@ -216,6 +220,55 @@ def run_tests():
         results.append(("Invoice number generation works without duplicates",
                         False, str(e)))
 
+    # ── Test 6: Trial balance is balanced after a sale ─────────────────────────
+    try:
+        client = app.test_client()
+        with app.app_context():
+            db.session.rollback()
+
+            user = User.query.filter_by(username='admin').first()
+            customer = Customer.query.first()
+            if customer is None:
+                customer = Customer(name='Test Customer', phone='9999999999')
+                db.session.add(customer)
+                db.session.commit()
+
+            item = Inventory.query.first()
+            if item is None:
+                item = Inventory(stone_type='Granite', size='20mm',
+                                 opening_stock=100, purchases=0, sales=0,
+                                 closing_stock=100, rate_per_ton=1200,
+                                 total_cost=0)
+                db.session.add(item)
+                db.session.commit()
+
+        with client.session_transaction() as sess:
+            sess['user_id'] = user.id
+            sess['role'] = user.role
+
+        response = client.post('/sales/create', data={
+            'customer_id': str(customer.id),
+            'stone_type': item.stone_type,
+            'size': item.size,
+            'quantity': '5',
+            'rate': '100',
+            'gst_rate': '5',
+            'payment_type': 'cash'
+        }, follow_redirects=True)
+
+        with app.app_context():
+            from datetime import date
+            trial = get_trial_balance(date.today())
+
+        is_balanced = trial.get('is_balanced', False)
+        results.append(("Trial balance is balanced after a sale", is_balanced,
+                        f"is_balanced={is_balanced}"))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        results.append(("Trial balance is balanced after a sale",
+                        False, str(e)))
+
     # ── Print results ─────────────────────────────────────────────────────────
     print("\n=== Smoke Test Results ===")
     for name, passed, *extra in results:
@@ -229,8 +282,5 @@ def run_tests():
 
 
 if __name__ == '__main__':
-    from werkzeug.security import generate_password_hash
-    from models import Customer
-
     ok = run_tests()
     sys.exit(0 if ok else 1)

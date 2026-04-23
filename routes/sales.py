@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file
 from routes.dashboard import login_required
+from routes.auth_utils import admin_required
 from ext import db
 from models import Customer, Sales, Inventory, Account, Payment, InvoiceSequence
 from datetime import datetime, date
@@ -9,23 +10,10 @@ from sqlalchemy import select
 from accounting_engine import record_sale, record_payment, get_or_create_account, create_journal_entry_no_commit
 from validators import parse_positive_float, parse_non_negative_float, parse_gst_rate
 
-def admin_required(f):
-    from functools import wraps
-    from flask import session, flash, redirect, url_for
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return redirect(url_for('auth.login'))
-        if session.get('role') != 'admin':
-            flash('Admin access required', 'error')
-            return redirect(url_for('dashboard.index'))
-        return f(*args, **kwargs)
-    return decorated_function
-
 bp = Blueprint('sales', __name__)
 
 def generate_invoice_number():
-    """Generate sequential invoice number with row-level locking to prevent race conditions."""
+    """Generate sequential invoice number - uses row-level lock for SQLite compatibility."""
     prefix = f"INV-{date.today().year}"
     row = db.session.query(InvoiceSequence).filter_by(prefix=prefix).with_for_update().first()
     if row is None:
@@ -105,8 +93,13 @@ def create_sale():
             quantity = parse_positive_float(request.form.get('quantity'), 'Quantity')
             rate     = parse_positive_float(request.form.get('rate'), 'Rate')
             gst_rate = parse_gst_rate(request.form.get('gst_rate', 5))
+            supply_type = request.form.get('supply_type', 'intra')
         except ValueError as e:
             flash(str(e), 'error')
+            return render_template('create_sale.html', customers=customers, inventory=inventory)
+
+        if supply_type not in ('intra', 'inter'):
+            flash('Invalid supply type', 'error')
             return render_template('create_sale.html', customers=customers, inventory=inventory)
 
         item = Inventory.query.filter_by(stone_type=stone_type, size=size).first()
@@ -139,6 +132,10 @@ def create_sale():
             amount=amount,
             gst_rate=gst_rate,
             gst_amount=gst_amount,
+            cgst_amount=gst_amount/2 if supply_type == 'intra' else 0,
+            sgst_amount=gst_amount/2 if supply_type == 'intra' else 0,
+            igst_amount=gst_amount if supply_type == 'inter' else 0,
+            supply_type=supply_type,
             total_amount=total_amount,
             payment_type=payment_type,
             payment_status=payment_status,
@@ -154,7 +151,9 @@ def create_sale():
 
         # Atomic journal entries (no commit inside)
         sales_acc = get_or_create_account('Sales Revenue', 'income')
-        gst_payable_acc = get_or_create_account('GST Payable', 'liability')
+        cgst_payable = get_or_create_account('CGST Payable', 'liability')
+        sgst_payable = get_or_create_account('SGST Payable', 'liability')
+        igst_payable = get_or_create_account('IGST Payable', 'liability')
 
         if payment_type == 'credit':
             receivable_acc = get_or_create_account('Accounts Receivable', 'asset')
@@ -166,7 +165,12 @@ def create_sale():
         create_journal_entry_no_commit(date.today(), f"Sale - {stone_type} {size}", debit_account.id, sales_acc.id, amount)
 
         if gst_amount > 0:
-            create_journal_entry_no_commit(date.today(), f"GST Collected - {stone_type} {size}", debit_account.id, gst_payable_acc.id, gst_amount)
+            if supply_type == 'inter':
+                create_journal_entry_no_commit(date.today(), f"IGST Collected - {stone_type} {size}", debit_account.id, igst_payable.id, gst_amount)
+            else:
+                half_gst = gst_amount / 2
+                create_journal_entry_no_commit(date.today(), f"CGST Collected - {stone_type} {size}", debit_account.id, cgst_payable.id, half_gst)
+                create_journal_entry_no_commit(date.today(), f"SGST Collected - {stone_type} {size}", debit_account.id, sgst_payable.id, half_gst)
 
         if quantity > 0 and item and item.rate_per_ton > 0:
             cogs_acc = get_or_create_account('COGS', 'expense')

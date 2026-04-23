@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Fixed Assets{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Fixed Assets</h2>
+    <a href="{{ url_for('accounts.add_fixed_asset') }}" class="btn btn-success" style="margin-bottom: 15px;">Add New Asset</a>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Purchase Date</th>
+                <th>Cost (₹)</th>
+                <th>Salvage Value (₹)</th>
+                <th>Useful Life (Years)</th>
+                <th>Accumulated Depreciation (₹)</th>
+                <th>Monthly Depreciation (₹)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for asset in assets %}
+            <tr>
+                <td>{{ asset.name }}</td>
+                <td>{{ asset.purchase_date }}</td>
+                <td>₹{{ "%.2f"|format(asset.cost) }}</td>
+                <td>₹{{ "%.2f"|format(asset.salvage_value) }}</td>
+                <td>{{ asset.useful_life_years }}</td>
+                <td>₹{{ "%.2f"|format(asset.accumulated_depreciation or 0) }}</td>
+                <td>₹{{ "%.2f"|format((asset.cost - asset.salvage_value) / (asset.useful_life_years * 12)) }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7">No fixed assets found. Add your first asset.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <form method="POST" action="{{ url_for('accounts.run_depreciation') }}" style="margin-top: 20px;">
+        <button type="submit" class="btn btn-warning">Run Monthly Depreciation</button>
+    </form>
+
+    <a href="{{ url_for('accounts.index') }}" class="btn" style="margin-top: 15px;">Back to Accounts</a>
+</div>
+{% endblock %}

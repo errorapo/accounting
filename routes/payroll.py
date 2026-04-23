@@ -1,23 +1,11 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from routes.dashboard import login_required
+from routes.auth_utils import admin_required
 from ext import db
 from models import Employee, Payroll, Attendance
 from datetime import datetime
 from decimal import Decimal
 from validators import parse_non_negative_float
-
-def admin_required(f):
-    from functools import wraps
-    from flask import session, flash, redirect, url_for
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return redirect(url_for('auth.login'))
-        if session.get('role') != 'admin':
-            flash('Admin access required', 'error')
-            return redirect(url_for('dashboard.index'))
-        return f(*args, **kwargs)
-    return decorated_function
 
 bp = Blueprint('payroll', __name__)
 
@@ -282,7 +270,7 @@ def generate_payroll():
                 days_present += 1
             total_overtime += att.overtime_hours or 0
 
-        daily_rate = emp.base_salary / 30
+        daily_rate = emp.base_salary / 26  # Indian payroll uses 26 working days (excluding Sunday) as standard
         base = days_present * daily_rate
         
         overtime_amount = total_overtime * emp.hourly_rate * 1.5

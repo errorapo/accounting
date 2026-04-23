@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}AR/AP Aging Report{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Accounts Receivable Aging</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Customer</th>
+                <th>Invoice #</th>
+                <th>Invoice Date</th>
+                <th>Amount (₹)</th>
+                <th>Days Outstanding</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in ar_items %}
+            <tr style="color: {% if item.bucket == 'current' %}var(--text-light){% elif item.bucket == '30-60' %}orange{% elif item.bucket == '61-90' %}orangered{% else %}red{% endif %};">
+                <td>{{ item.party_name }}</td>
+                <td>{{ item.invoice_number }}</td>
+                <td>{{ item.invoice_date }}</td>
+                <td>₹{{ "%.2f"|format(item.amount) }}</td>
+                <td>{{ item.days_outstanding }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5">No outstanding receivables</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <h3 style="margin-top: 20px;">AR Summary</h3>
+    <table>
+        <tr><td>Current (0-30 days)</td><td>₹{{ "%.2f"|format(ar_by_bucket['current']) }}</td></tr>
+        <tr><td>31-60 days</td><td>₹{{ "%.2f"|format(ar_by_bucket['30-60']) }}</td></tr>
+        <tr><td>61-90 days</td><td>₹{{ "%.2f"|format(ar_by_bucket['61-90']) }}</td></tr>
+        <tr><td>Over 90 days</td><td>₹{{ "%.2f"|format(ar_by_bucket['over_90']) }}</td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Accounts Payable Aging</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Vendor</th>
+                <th>Invoice #</th>
+                <th>Invoice Date</th>
+                <th>Amount (₹)</th>
+                <th>Days Outstanding</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in ap_items %}
+            <tr style="color: {% if item.bucket == 'current' %}var(--text-light){% elif item.bucket == '30-60' %}orange{% elif item.bucket == '61-90' %}orangered{% else %}red{% endif %};">
+                <td>{{ item.party_name }}</td>
+                <td>{{ item.invoice_number }}</td>
+                <td>{{ item.invoice_date }}</td>
+                <td>₹{{ "%.2f"|format(item.amount) }}</td>
+                <td>{{ item.days_outstanding }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5">No outstanding payables</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <h3 style="margin-top: 20px;">AP Summary</h3>
+    <table>
+        <tr><td>Current (0-30 days)</td><td>₹{{ "%.2f"|format(ap_by_bucket['current']) }}</td></tr>
+        <tr><td>31-60 days</td><td>₹{{ "%.2f"|format(ap_by_bucket['30-60']) }}</td></tr>
+        <tr><td>61-90 days</td><td>₹{{ "%.2f"|format(ap_by_bucket['61-90']) }}</td></tr>
+        <tr><td>Over 90 days</td><td>₹{{ "%.2f"|format(ap_by_bucket['over_90']) }}</td></tr>
+    </table>
+</div>
+
+<a href="{{ url_for('reports.index') }}" class="btn" style="margin-top: 15px;">Back to Reports</a>
+{% endblock %}

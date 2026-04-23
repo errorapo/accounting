@@ -102,52 +102,90 @@ def gst_report():
     if start_date:
         start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
     else:
-        # Default to FY start (April 1 for India)
         if end_date.month >= 4:
             start_date = date(end_date.year, 4, 1)
         else:
             start_date = date(end_date.year - 1, 4, 1)
 
-    output_gst = db.session.query(func.sum(Sales.gst_amount)).filter(
+    # Output GST (Sales)
+    output_cgst = db.session.query(func.sum(Sales.cgst_amount)).filter(
         Sales.invoice_date >= start_date,
         Sales.invoice_date <= end_date
     ).scalar() or 0
 
-    input_gst_total = db.session.query(func.sum(Purchase.gst_amount)).filter(
-        Purchase.invoice_date >= start_date,
-        Purchase.invoice_date <= end_date
+    output_sgst = db.session.query(func.sum(Sales.sgst_amount)).filter(
+        Sales.invoice_date >= start_date,
+        Sales.invoice_date <= end_date
     ).scalar() or 0
 
-    itc_eligible_gst = db.session.query(func.sum(Purchase.gst_amount)).filter(
+    output_igst = db.session.query(func.sum(Sales.igst_amount)).filter(
+        Sales.invoice_date >= start_date,
+        Sales.invoice_date <= end_date
+    ).scalar() or 0
+
+    # Input GST (Purchases) - ITC eligible
+    input_cgst = db.session.query(func.sum(Purchase.cgst_amount)).filter(
         Purchase.invoice_date >= start_date,
         Purchase.invoice_date <= end_date,
         Purchase.itc_eligible == True
     ).scalar() or 0
 
-    itc_non_eligible_gst = input_gst_total - itc_eligible_gst
+    input_sgst = db.session.query(func.sum(Purchase.sgst_amount)).filter(
+        Purchase.invoice_date >= start_date,
+        Purchase.invoice_date <= end_date,
+        Purchase.itc_eligible == True
+    ).scalar() or 0
 
-    # FIXED: Use account balances (ITC offsets GST Payable)
-    gst_payable_acc = get_or_create_account('GST Payable', 'liability')
-    gst_receivable_acc = get_or_create_account('GST Receivable', 'asset')
+    input_igst = db.session.query(func.sum(Purchase.igst_amount)).filter(
+        Purchase.invoice_date >= start_date,
+        Purchase.invoice_date <= end_date,
+        Purchase.itc_eligible == True
+    ).scalar() or 0
 
-    # Get cumulative balances using the report date
-    gst_payable_balance = get_account_balance(gst_payable_acc.id, end_date)
-    gst_receivable_balance = get_account_balance(gst_receivable_acc.id, end_date)
+    # Non-ITC purchases
+    input_non_itc_cgst = db.session.query(func.sum(Purchase.cgst_amount)).filter(
+        Purchase.invoice_date >= start_date,
+        Purchase.invoice_date <= end_date,
+        Purchase.itc_eligible == False
+    ).scalar() or 0
 
-    # Net GST liability (Output GST - ITC claimed)
-    net_gst = gst_payable_balance - gst_receivable_balance
+    input_non_itc_sgst = db.session.query(func.sum(Purchase.sgst_amount)).filter(
+        Purchase.invoice_date >= start_date,
+        Purchase.invoice_date <= end_date,
+        Purchase.itc_eligible == False
+    ).scalar() or 0
+
+    input_non_itc_igst = db.session.query(func.sum(Purchase.igst_amount)).filter(
+        Purchase.invoice_date >= start_date,
+        Purchase.invoice_date <= end_date,
+        Purchase.itc_eligible == False
+    ).scalar() or 0
+
+    # Net liabilities
+    net_cgst = output_cgst - input_cgst
+    net_sgst = output_sgst - input_sgst
+    net_igst = output_igst - input_igst
+
+    output_gst_total = output_cgst + output_sgst + output_igst
+    input_gst_total = input_cgst + input_sgst + input_igst
+    itc_non_eligible_gst = input_non_itc_cgst + input_non_itc_sgst + input_non_itc_igst
 
     return render_template('gst_report.html',
-                    output_gst=output_gst,
+                    output_cgst=output_cgst,
+                    output_sgst=output_sgst,
+                    output_igst=output_igst,
+                    input_cgst=input_cgst,
+                    input_sgst=input_sgst,
+                    input_igst=input_igst,
+                    net_cgst=net_cgst,
+                    net_sgst=net_sgst,
+                    net_igst=net_igst,
+                    output_gst_total=output_gst_total,
                     input_gst_total=input_gst_total,
-                    itc_eligible_gst=itc_eligible_gst,
                     itc_non_eligible_gst=itc_non_eligible_gst,
-                    net_gst=net_gst,
                     start_date=start_date,
                     end_date=end_date,
-                    as_of_date=end_date,
-                    gst_payable_balance=gst_payable_balance,
-                    gst_receivable_balance=gst_receivable_balance)
+                    as_of_date=end_date)
 
 @bp.route('/reports/gst/pay', methods=['GET', 'POST'])
 @login_required
@@ -197,3 +235,81 @@ def payroll_summary():
     total = db.session.query(func.sum(Payroll.net_salary)).scalar() or 0
     
     return render_template('payroll_summary.html', payrolls=payrolls, total=total)
+
+@bp.route('/reports/aging')
+@login_required
+def aging_report():
+    from models import Purchase, Customer, Vendor
+    
+    today = date.today()
+    
+    customer_model = Customer.query
+    sales_credit = Sales.query.filter(
+        Sales.payment_type == 'credit',
+        Sales.payment_status != 'paid'
+    ).all()
+    
+    ar_items = []
+    for sale in sales_credit:
+        customer = Customer.query.get(sale.customer_id) if sale.customer_id else None
+        days_outstanding = (today - sale.invoice_date).days if sale.invoice_date else 0
+        
+        if days_outstanding <= 30:
+            bucket = 'current'
+        elif days_outstanding <= 60:
+            bucket = '30-60'
+        elif days_outstanding <= 90:
+            bucket = '61-90'
+        else:
+            bucket = 'over_90'
+        
+        ar_items.append({
+            'party_name': customer.name if customer else 'Unknown',
+            'invoice_number': sale.invoice_number,
+            'invoice_date': sale.invoice_date,
+            'amount': float(sale.total_amount or 0),
+            'days_outstanding': days_outstanding,
+            'bucket': bucket
+        })
+    
+    purchases_credit = Purchase.query.filter(
+        Purchase.payment_type == 'credit',
+        Purchase.payment_status != 'paid'
+    ).all()
+    
+    ap_items = []
+    for purchase in purchases_credit:
+        vendor = Vendor.query.get(purchase.vendor_id) if purchase.vendor_id else None
+        days_outstanding = (today - purchase.invoice_date).days if purchase.invoice_date else 0
+        
+        if days_outstanding <= 30:
+            bucket = 'current'
+        elif days_outstanding <= 60:
+            bucket = '30-60'
+        elif days_outstanding <= 90:
+            bucket = '61-90'
+        else:
+            bucket = 'over_90'
+        
+        ap_items.append({
+            'party_name': vendor.name if vendor else purchase.vendor_name or 'Unknown',
+            'invoice_number': purchase.invoice_number,
+            'invoice_date': purchase.invoice_date,
+            'amount': float(purchase.total_amount or 0),
+            'days_outstanding': days_outstanding,
+            'bucket': bucket
+        })
+    
+    ar_by_bucket = {'current': 0, '30-60': 0, '61-90': 0, 'over_90': 0}
+    for item in ar_items:
+        ar_by_bucket[item['bucket']] += item['amount']
+    
+    ap_by_bucket = {'current': 0, '30-60': 0, '61-90': 0, 'over_90': 0}
+    for item in ap_items:
+        ap_by_bucket[item['bucket']] += item['amount']
+    
+    return render_template('aging_report.html',
+                         ar_items=ar_items,
+                         ap_items=ap_items,
+                         ar_by_bucket=ar_by_bucket,
+                         ap_by_bucket=ap_by_bucket)

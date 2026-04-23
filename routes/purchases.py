@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file
 from routes.dashboard import login_required
+from routes.auth_utils import admin_required
 from ext import db
 from models import Purchase, Inventory, Account, PurchasePayment
 from datetime import datetime, date
@@ -7,32 +8,18 @@ from decimal import Decimal
 from accounting_engine import record_purchase, record_purchase_payment, create_journal_entry, get_or_create_account
 from validators import parse_positive_float, parse_non_negative_float, parse_gst_rate
 
-def admin_required(f):
-    from functools import wraps
-    from flask import session, flash, redirect, url_for
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return redirect(url_for('auth.login'))
-        if session.get('role') != 'admin':
-            flash('Admin access required', 'error')
-            return redirect(url_for('dashboard.index'))
-        return f(*args, **kwargs)
-    return decorated_function
-
 bp = Blueprint('purchases', __name__)
 
 def generate_purchase_invoice_number():
-    last = Purchase.query.order_by(Purchase.id.desc()).first()
-    if last and last.invoice_number:
-        try:
-            last_num = int(last.invoice_number.split('-')[-1])
-            next_num = last_num + 1
-        except:
-            next_num = 1
-    else:
-        next_num = 1
-    return f"PUR-{date.today().year}-{next_num:05d}"
+    """Generate sequential purchase invoice number - uses row-level lock."""
+    prefix = f"PUR-{date.today().year}"
+    row = db.session.query(InvoiceSequence).filter_by(prefix=prefix).with_for_update().first()
+    if row is None:
+        row = InvoiceSequence(prefix=prefix, last_number=0)
+        db.session.add(row)
+        db.session.flush()
+    row.last_number += 1
+    return f"{prefix}-{row.last_number:05d}"
 
 @bp.route('/purchases')
 @login_required
@@ -57,8 +44,13 @@ def create_purchase():
             quantity = parse_positive_float(request.form.get('quantity'), 'Quantity')
             rate     = parse_positive_float(request.form.get('rate'), 'Rate')
             gst_rate = parse_gst_rate(request.form.get('gst_rate', 5))
+            supply_type = request.form.get('supply_type', 'intra')
         except ValueError as e:
             flash(str(e), 'error')
+            return render_template('create_purchase.html', inventory=inventory, vendors=vendors)
+        
+        if supply_type not in ('intra', 'inter'):
+            flash('Invalid supply type', 'error')
             return render_template('create_purchase.html', inventory=inventory, vendors=vendors)
         itc_eligible = request.form.get('itc_eligible') == '1'
 
@@ -86,6 +78,10 @@ def create_purchase():
             amount=amount,
             gst_rate=gst_rate,
             gst_amount=gst_amount,
+            cgst_amount=gst_amount/2 if supply_type == 'intra' else 0,
+            sgst_amount=gst_amount/2 if supply_type == 'intra' else 0,
+            igst_amount=gst_amount if supply_type == 'inter' else 0,
+            supply_type=supply_type,
             total_amount=total_amount,
             payment_type=payment_type,
             payment_status=payment_status,
@@ -95,12 +91,7 @@ def create_purchase():
         db.session.add(purchase)
         db.session.flush()
 
-        item = Inventory.query.filter_by(stone_type=stone_type, size=size).first()
-        if item:
-            item.purchases += Decimal(str(quantity))
-            item.closing_stock = item.opening_stock + item.purchases - item.sales
-
-        record_purchase(date.today(), vendor_name, amount, gst_amount, itc_eligible, payment_type, f"{stone_type} {size}", quantity, stone_type, size)
+        record_purchase(date.today(), vendor_name, amount, gst_amount, itc_eligible, payment_type, f"{stone_type} {size}", quantity, stone_type, size, supply_type)
 
         db.session.commit()
         flash(f'Purchase created successfully - {purchase.invoice_number}', 'success')

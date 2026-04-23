@@ -61,6 +61,7 @@ class Inventory(db.Model):
     sales = db.Column(db.Numeric(precision=15, scale=3), default=0)
     closing_stock = db.Column(db.Numeric(precision=15, scale=3), default=0)
     rate_per_ton = db.Column(db.Numeric(precision=15, scale=2), default=0)
+    total_cost = db.Column(db.Numeric(precision=15, scale=2), default=0)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Customer(db.Model):
@@ -91,6 +92,10 @@ class Sales(db.Model):
     amount = db.Column(db.Numeric(precision=15, scale=2))
     gst_rate = db.Column(db.Numeric(precision=5, scale=2), default=5)
     gst_amount = db.Column(db.Numeric(precision=15, scale=2), default=0)
+    cgst_amount = db.Column(db.Numeric(precision=15, scale=2), default=0)
+    sgst_amount = db.Column(db.Numeric(precision=15, scale=2), default=0)
+    igst_amount = db.Column(db.Numeric(precision=15, scale=2), default=0)
+    supply_type = db.Column(db.String(10), default='intra')  # 'intra' or 'inter'
     total_amount = db.Column(db.Numeric(precision=15, scale=2))
     payment_type = db.Column(db.String(20), default='cash')
     payment_status = db.Column(db.String(20), default='paid')
@@ -111,7 +116,10 @@ class Purchase(db.Model):
     amount = db.Column(db.Numeric(precision=15, scale=2))
     gst_rate = db.Column(db.Numeric(precision=5, scale=2), default=5)
     gst_amount = db.Column(db.Numeric(precision=15, scale=2), default=0)
-    total_amount = db.Column(db.Numeric(precision=15, scale=2))
+    cgst_amount = db.Column(db.Numeric(precision=15, scale=2), default=0)
+    sgst_amount = db.Column(db.Numeric(precision=15, scale=2), default=0)
+    igst_amount = db.Column(db.Numeric(precision=15, scale=2), default=0)
+    supply_type = db.Column(db.String(10), default='intra')  # 'intra' or 'inter'
     payment_type = db.Column(db.String(20), default='cash')
     payment_status = db.Column(db.String(20), default='paid')
     itc_eligible = db.Column(db.Boolean, default=True)
@@ -159,6 +167,17 @@ class Transaction(db.Model):
     is_posted = db.Column(db.Boolean, default=True)
     is_reversal = db.Column(db.Boolean, default=False)
     original_entry_id = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class FixedAsset(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    purchase_date = db.Column(db.Date)
+    cost = db.Column(db.Numeric(precision=15, scale=2), nullable=False)
+    salvage_value = db.Column(db.Numeric(precision=15, scale=2), default=0)
+    useful_life_years = db.Column(db.Integer, nullable=False)
+    accumulated_depreciation = db.Column(db.Numeric(precision=15, scale=2), default=0)
+    is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class JournalEntry(db.Model):

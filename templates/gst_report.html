@@ -12,51 +12,102 @@
         <button type="submit" class="btn">Generate</button>
     </form>
 
-    <h3 style="color: var(--accent-blue);">GST for Period</h3>
+    <h3 style="color: var(--accent-blue);">Output GST (Sales)</h3>
     <table>
         <tr>
-            <td><strong>Output GST (Collected on Sales)</strong></td>
-            <td>₹{{ "%.2f"|format(output_gst) }}</td>
+            <th>Tax Type</th>
+            <th>Amount (₹)</th>
         </tr>
         <tr>
-            <td style="padding-left: 20px;"><strong>Less: Input GST Total</strong></td>
-            <td>(₹{{ "%.2f"|format(input_gst_total) }})</td>
+            <td>CGST</td>
+            <td>₹{{ "%.2f"|format(output_cgst) }}</td>
         </tr>
         <tr>
-            <td style="padding-left: 40px;">  - ITC Eligible</td>
-            <td>₹{{ "%.2f"|format(itc_eligible_gst) }}</td>
+            <td>SGST</td>
+            <td>₹{{ "%.2f"|format(output_sgst) }}</td>
         </tr>
         <tr>
-            <td style="padding-left: 40px;">  - ITC Non-Eligible</td>
+            <td>IGST</td>
+            <td>₹{{ "%.2f"|format(output_igst) }}</td>
+        </tr>
+        <tr style="font-weight: bold;">
+            <td>Total Output GST</td>
+            <td>₹{{ "%.2f"|format(output_gst_total) }}</td>
+        </tr>
+    </table>
+
+    <h3 style="color: var(--accent-blue); margin-top: 20px;">Input GST (Purchases - ITC Eligible)</h3>
+    <table>
+        <tr>
+            <th>Tax Type</th>
+            <th>Amount (₹)</th>
+        </tr>
+        <tr>
+            <td>CGST</td>
+            <td>₹{{ "%.2f"|format(input_cgst) }}</td>
+        </tr>
+        <tr>
+            <td>SGST</td>
+            <td>₹{{ "%.2f"|format(input_sgst) }}</td>
+        </tr>
+        <tr>
+            <td>IGST</td>
+            <td>₹{{ "%.2f"|format(input_igst) }}</td>
+        </tr>
+        <tr style="font-weight: bold;">
+            <td>Total ITC Available</td>
+            <td>₹{{ "%.2f"|format(input_gst_total) }}</td>
+        </tr>
+    </table>
+
+    <h3 style="color: var(--accent-blue); margin-top: 20px;">Non-ITC Purchases</h3>
+    <table>
+        <tr>
+            <td>CGST (Non-eligible)</td>
             <td>₹{{ "%.2f"|format(itc_non_eligible_gst) }}</td>
         </tr>
-        <tr style="font-weight: bold; font-size: 18px;">
-            <td>GST for Period</td>
-            <td>₹{{ "%.2f"|format(output_gst - itc_eligible_gst) }}</td>
-        </tr>
     </table>
 
-    <h3 style="color: var(--accent-blue); margin-top: 20px;">Cumulative GST Account Balances</h3>
+    <h3 style="color: var(--accent-blue); margin-top: 20px;">Net GST Liability</h3>
     <table>
         <tr>
-            <td>GST Payable (Output GST collected)</td>
-            <td>₹{{ "%.2f"|format(gst_payable_balance) }}</td>
+            <th>Tax Type</th>
+            <th>Output</th>
+            <th>Less: ITC</th>
+            <th>Net</th>
         </tr>
         <tr>
-            <td>GST Receivable (ITC claimed)</td>
-            <td>(₹{{ "%.2f"|format(gst_receivable_balance) }})</td>
+            <td>CGST</td>
+            <td>₹{{ "%.2f"|format(output_cgst) }}</td>
+            <td>(₹{{ "%.2f"|format(input_cgst) }})</td>
+            <td>₹{{ "%.2f"|format(net_cgst) }}</td>
         </tr>
-        <tr style="border-top: 2px solid var(--accent-blue); font-weight: bold; font-size: 18px; background: {% if net_gst > 0 %}#f8d7da{% else %}#d4edda{% endif %};">
-            <td>Net GST Liability</td>
-            <td>₹{{ "%.2f"|format(net_gst) }}</td>
+        <tr>
+            <td>SGST</td>
+            <td>₹{{ "%.2f"|format(output_sgst) }}</td>
+            <td>(₹{{ "%.2f"|format(input_sgst) }})</td>
+            <td>₹{{ "%.2f"|format(net_sgst) }}</td>
+        </tr>
+        <tr>
+            <td>IGST</td>
+            <td>₹{{ "%.2f"|format(output_igst) }}</td>
+            <td>(₹{{ "%.2f"|format(input_igst) }})</td>
+            <td>₹{{ "%.2f"|format(net_igst) }}</td>
+        </tr>
+        <tr style="font-weight: bold; font-size: 18px; background: {% if net_cgst + net_sgst + net_igst > 0 %}#f8d7da{% else %}#d4edda{% endif %};">
+            <td>Total Net GST</td>
+            <td>₹{{ "%.2f"|format(output_gst_total) }}</td>
+            <td>(₹{{ "%.2f"|format(input_gst_total) }})</td>
+            <td>₹{{ "%.2f"|format(net_cgst + net_sgst + net_igst) }}</td>
         </tr>
     </table>
 
-    {% if net_gst > 0 %}
-    <p style="color: red; font-size: 18px;">GST to be paid: <strong>₹{{ "%.2f"|format(net_gst) }}</strong></p>
+    {% set total_net = net_cgst + net_sgst + net_igst %}
+    {% if total_net > 0 %}
+    <p style="color: red; font-size: 18px;">GST to be paid: <strong>₹{{ "%.2f"|format(total_net) }}</strong></p>
     <a href="{{ url_for('reports.gst_pay') }}" class="btn btn-success">Pay GST to Government</a>
-    {% elif net_gst < 0 %}
-    <p style="color: green; font-size: 18px;">ITC available to carry forward: ₹{{ "%.2f"|format(net_gst|abs) }}</p>
+    {% elif total_net < 0 %}
+    <p style="color: green; font-size: 18px;">ITC available to carry forward: ₹{{ "%.2f"|format(total_net|abs) }}</p>
     {% else %}
     <p style="color: blue;">No GST liability</p>
     {% endif %}

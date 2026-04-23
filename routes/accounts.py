@@ -1,23 +1,11 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from routes.dashboard import login_required
+from routes.auth_utils import admin_required
 from ext import db
 from models import Account, Transaction, JournalEntry
 from datetime import datetime, date
 from accounting_engine import create_journal_entry, reverse_journal_entry, get_or_create_account
 from models import Transaction
-
-def admin_required(f):
-    from functools import wraps
-    from flask import session, flash, redirect, url_for
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return redirect(url_for('auth.login'))
-        if session.get('role') != 'admin':
-            flash('Admin access required', 'error')
-            return redirect(url_for('dashboard.index'))
-        return f(*args, **kwargs)
-    return decorated_function
 
 bp = Blueprint('accounts', __name__)
 
@@ -139,11 +127,10 @@ def opening_balances():
         # Use Opening Balance Equity clearing account for all opening balances
         opening_eq = get_or_create_account('Opening Balance Equity', 'capital')
 
-        # Assets: Dr Asset, Cr Opening Balance Equity
+        # Owner equity (non-cash): Dr Opening Balance Equity, Cr Capital
         if capital > 0:
-            # Owner investment: Dr Cash, Cr Capital (owner's equity)
             create_journal_entry(balance_date, "Opening Balance - Capital",
-                get_or_create_account('Cash', 'asset').id,
+                opening_eq.id,
                 get_or_create_account('Capital', 'capital').id, capital)
         if cash > 0:
             create_journal_entry(balance_date, "Opening Balance - Cash",
@@ -176,3 +163,60 @@ def opening_balances():
         return redirect(url_for('reports.index'))
 
     return render_template('opening_balances.html')
+
+@bp.route('/depreciation/run', methods=['POST'])
+@admin_required
+def run_depreciation():
+    from accounting_engine import run_monthly_depreciation
+    from datetime import date
+
+    result = run_monthly_depreciation(date.today())
+
+    if result['total_depreciation'] > 0:
+        flash(f"Depreciation run: ₹{result['total_depreciation']:.2f} for {len(result['assets_processed'])} assets", 'success')
+    elif result['errors']:
+        for err in result['errors']:
+            flash(err, 'error')
+    else:
+        flash('No depreciation to run (already processed this month)', 'info')
+
+    return redirect(url_for('accounts.fixed_assets'))
+
+@bp.route('/fixed-assets')
+@login_required
+def fixed_assets():
+    from models import FixedAsset
+    assets = FixedAsset.query.filter_by(is_active=True).all()
+    return render_template('fixed_assets.html', assets=assets)
+
+@bp.route('/fixed-assets/add', methods=['GET', 'POST'])
+@admin_required
+def add_fixed_asset():
+    from models import FixedAsset
+    from ext import db
+
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        purchase_date = request.form.get('purchase_date')
+        cost = float(request.form.get('cost', 0))
+        salvage_value = float(request.form.get('salvage_value', 0))
+        useful_life = int(request.form.get('useful_life_years', 0))
+
+        if not name or cost <= 0 or useful_life <= 0:
+            flash('Name, cost, and useful life are required', 'error')
+            return redirect(url_for('accounts.add_fixed_asset'))
+
+        asset = FixedAsset(
+            name=name,
+            purchase_date=datetime.strptime(purchase_date, '%Y-%m-%d').date() if purchase_date else date.today(),
+            cost=cost,
+            salvage_value=salvage_value,
+            useful_life_years=useful_life
+        )
+        db.session.add(asset)
+        db.session.commit()
+
+        flash(f'Fixed asset "{name}" added', 'success')
+        return redirect(url_for('accounts.fixed_assets'))
+
+    return render_template('add_fixed_asset.html')

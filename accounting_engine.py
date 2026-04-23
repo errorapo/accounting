@@ -8,7 +8,7 @@ FIXED: Support for credit sales (Accounts Receivable)
 """
 from ext import db
 from models import Account, Transaction, JournalEntry
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from sqlalchemy import func
 
 ACCOUNT_TYPES = {
@@ -25,12 +25,18 @@ DEFAULT_ACCOUNTS = [
     ('Accounts Receivable', 'asset'),
     ('Inventory', 'asset'),
     ('Fixed Assets', 'asset'),
+    ('Accumulated Depreciation', 'asset'),  # Contra-asset - reduces fixed asset value
+    ('CGST Receivable', 'asset'),
+    ('SGST Receivable', 'asset'),
+    ('IGST Receivable', 'asset'),
     ('Accounts Payable', 'liability'),
     ('Loans Payable', 'liability'),
     ('PF Payable', 'liability'),
     ('TDS Payable', 'liability'),
     ('GST Payable', 'liability'),
-    ('GST Receivable', 'asset'),
+    ('CGST Payable', 'liability'),
+    ('SGST Payable', 'liability'),
+    ('IGST Payable', 'liability'),
     ('Capital', 'capital'),
     ('Retained Earnings', 'capital'),
     ('Opening Balance Equity', 'capital'),
@@ -318,8 +324,6 @@ def get_balance_sheet(as_of_date=None):
         accounts = Account.query.filter_by(account_type=acc_type, is_active=True).all()
 
         for account in accounts:
-            if acc_type == 'capital' and account.name == 'Retained Earnings':
-                continue
             balance = get_account_balance(account.id, report_date)
             if balance != 0:
                 if acc_type == 'asset':
@@ -332,11 +336,14 @@ def get_balance_sheet(as_of_date=None):
                     capital.append({'name': account.name, 'balance': balance})
                     total_capital += balance
     
-    # FIX: Accumulate ALL prior profits from start of FY, not just current month
-    retained_earnings = get_income_statement(fy_start, report_date)['net_profit']
-    if retained_earnings != 0:
-        capital.append({'name': 'Retained Earnings', 'balance': retained_earnings})
-        total_capital += retained_earnings
+    # Retained Earnings: prior-year balance + current-year profit
+    retained_acc = Account.query.filter_by(name='Retained Earnings', is_active=True).first()
+    prior_retained = get_account_balance(retained_acc.id, fy_start - timedelta(days=1)) if retained_acc else 0
+    current_year_profit = get_income_statement(fy_start, report_date)['net_profit']
+    total_retained = prior_retained + current_year_profit
+    if total_retained != 0:
+        capital.append({'name': 'Retained Earnings', 'balance': total_retained})
+        total_capital += total_retained
     
     return {
         'assets': assets,
@@ -389,12 +396,17 @@ def get_income_statement(start_date, end_date):
         'is_profitable': net_profit >= 0
     }
 
-def record_sale(date, customer_name, amount, gst_amount, payment_type='cash', description="Sale", quantity=0, stone_type=None, size=None):
+def record_sale(date, customer_name, amount, gst_amount, payment_type='cash', description="Sale", quantity=0, stone_type=None, size=None, supply_type='intra'):
     """Record a sales transaction with journal entry.
 
-    Journal Entry:
-        Cash Sale:  Debit Cash, Credit Sales Revenue + Credit GST Payable
-        Credit Sale: Debit Accounts Receivable, Credit Sales Revenue + Credit GST Payable
+    Journal Entry (intra-state):
+        Debit Cash/AR, Credit Sales Revenue
+        Debit Cash/AR, Credit CGST Payable
+        Debit Cash/AR, Credit SGST Payable
+
+    Journal Entry (inter-state):
+        Debit Cash/AR, Credit Sales Revenue
+        Debit Cash/AR, Credit IGST Payable
 
     Args:
         date: Transaction date
@@ -406,15 +418,18 @@ def record_sale(date, customer_name, amount, gst_amount, payment_type='cash', de
         quantity: Quantity sold (for COGS calculation)
         stone_type: Stone type (for COGS lookup from inventory)
         size: Stone size (for COGS lookup from inventory)
+        supply_type: 'intra' (CGST+SGST) or 'inter' (IGST only)
 
-    FIXED: Now posts GST Payable liability.
+    FIXED: Now posts CGST/SGST or IGST based on supply_type.
     FIXED: Now supports credit sales (Accounts Receivable).
     FIXED: Now records COGS based on inventory cost rate.
     """
     from models import Inventory
 
     sales_acc = get_or_create_account('Sales Revenue', 'income')
-    gst_payable_acc = get_or_create_account('GST Payable', 'liability')
+    cgst_payable = get_or_create_account('CGST Payable', 'liability')
+    sgst_payable = get_or_create_account('SGST Payable', 'liability')
+    igst_payable = get_or_create_account('IGST Payable', 'liability')
 
     if isinstance(date, str):
         date = datetime.strptime(date, '%Y-%m-%d').date()
@@ -428,13 +443,18 @@ def record_sale(date, customer_name, amount, gst_amount, payment_type='cash', de
         debit_account = cash_acc
         desc = f"Sale (Cash) - {customer_name} - {description}"
 
-    # Debit: Cash or AR for the taxable amount
     create_journal_entry(date, desc, debit_account.id, sales_acc.id, amount)
 
-    # Credit: GST Payable (output GST collected from customer)
     if gst_amount > 0:
-        gst_desc = f"GST Collected - {description}"
-        create_journal_entry(date, gst_desc, debit_account.id, gst_payable_acc.id, gst_amount)
+        if supply_type == 'inter':
+            igst_desc = f"IGST Collected - {description}"
+            create_journal_entry(date, igst_desc, debit_account.id, igst_payable.id, gst_amount)
+        else:
+            half_gst = gst_amount / 2
+            cgst_desc = f"CGST Collected - {description}"
+            create_journal_entry(date, cgst_desc, debit_account.id, cgst_payable.id, half_gst)
+            sgst_desc = f"SGST Collected - {description}"
+            create_journal_entry(date, sgst_desc, debit_account.id, sgst_payable.id, half_gst)
 
     if quantity > 0 and stone_type and size:
         item = Inventory.query.filter_by(stone_type=stone_type, size=size).first()
@@ -445,6 +465,14 @@ def record_sale(date, customer_name, amount, gst_amount, payment_type='cash', de
             cogs_desc = f"COGS - {description}"
             create_journal_entry(date, cogs_desc, cogs_acc.id, inventory_acc.id, cogs_amount)
 
+            # Update inventory for weighted average cost
+            item.closing_stock = (item.closing_stock or 0) - quantity
+            item.sales = (item.sales or 0) + quantity
+            if item.closing_stock > 0:
+                item.total_cost = item.closing_stock * item.rate_per_ton
+            else:
+                item.total_cost = 0
+
     return {
         'type': 'sale',
         'customer': customer_name,
@@ -454,7 +482,7 @@ def record_sale(date, customer_name, amount, gst_amount, payment_type='cash', de
         'description': desc
     }
 
-def record_purchase(date, vendor_name, amount, gst_amount, itc_eligible=True, payment_type='cash', description="Purchase", quantity=0, stone_type=None, size=None):
+def record_purchase(date, vendor_name, amount, gst_amount, itc_eligible=True, payment_type='cash', description="Purchase", quantity=0, stone_type=None, size=None, supply_type='intra'):
     """Record a purchase with journal entry.
 
     Args:
@@ -468,9 +496,10 @@ def record_purchase(date, vendor_name, amount, gst_amount, itc_eligible=True, pa
         quantity: Quantity purchased (for inventory tracking)
         stone_type: Stone type (for inventory lookup)
         size: Stone size (for inventory lookup)
+        supply_type: 'intra' (CGST+SGST) or 'inter' (IGST only)
 
     Journal Entry for ITC purchase (credit):
-        Inventory (cost) + GST Receivable (ITC) → Accounts Payable (total)
+        Inventory (cost) + CGST/SGST or IGST Receivable → Accounts Payable (total)
     Journal Entry for non-ITC purchase (credit):
         Inventory (total incl. GST) → Accounts Payable (total)
     """
@@ -480,6 +509,9 @@ def record_purchase(date, vendor_name, amount, gst_amount, itc_eligible=True, pa
         date = datetime.strptime(date, '%Y-%m-%d').date()
 
     total_invoice = amount + gst_amount
+    cgst_receivable = get_or_create_account('CGST Receivable', 'asset')
+    sgst_receivable = get_or_create_account('SGST Receivable', 'asset')
+    igst_receivable = get_or_create_account('IGST Receivable', 'asset')
 
     # Check if this is an inventory-tracking purchase
     is_inventory_purchase = quantity > 0 and stone_type and size
@@ -504,9 +536,16 @@ def record_purchase(date, vendor_name, amount, gst_amount, itc_eligible=True, pa
             purchases_acc = get_or_create_account('Purchases', 'expense')
             create_journal_entry(date, desc, purchases_acc.id, credit_account.id, amount)
 
-        gst_recv_acc = get_or_create_account('GST Receivable', 'asset')
-        gst_itc_desc = f"ITC GST - {description}"
-        create_journal_entry(date, gst_itc_desc, gst_recv_acc.id, credit_account.id, gst_amount)
+        # Split ITC by supply type
+        if supply_type == 'inter':
+            gst_itc_desc = f"ITC IGST - {description}"
+            create_journal_entry(date, gst_itc_desc, igst_receivable.id, credit_account.id, gst_amount)
+        else:
+            half_gst = gst_amount / 2
+            cgst_itc_desc = f"ITC CGST - {description}"
+            create_journal_entry(date, cgst_itc_desc, cgst_receivable.id, credit_account.id, half_gst)
+            sgst_itc_desc = f"ITC SGST - {description}"
+            create_journal_entry(date, sgst_itc_desc, sgst_receivable.id, credit_account.id, half_gst)
     elif is_inventory_purchase and item and item.rate_per_ton > 0:
         # Non-ITC but inventory-tracked: GST added to inventory cost
         inventory_acc = get_or_create_account('Inventory', 'asset')
@@ -515,6 +554,16 @@ def record_purchase(date, vendor_name, amount, gst_amount, itc_eligible=True, pa
         # Non-ITC expense purchase: GST added to expense
         purchases_acc = get_or_create_account('Purchases', 'expense')
         create_journal_entry(date, desc, purchases_acc.id, credit_account.id, total_invoice)
+
+    # Update inventory weighted average cost
+    if is_inventory_purchase and item:
+        new_stock = (item.closing_stock or 0) + quantity
+        new_total_cost = (item.closing_stock or 0) * (item.rate_per_ton or 0) + quantity * rate
+        if new_stock > 0:
+            item.rate_per_ton = new_total_cost / new_stock
+        item.total_cost = new_total_cost
+        item.closing_stock = new_stock
+        item.purchases = (item.purchases or 0) + quantity
 
     return {
         'type': 'purchase',
@@ -527,14 +576,15 @@ def record_purchase(date, vendor_name, amount, gst_amount, itc_eligible=True, pa
     }
 
 def record_salary_payment(date, employee_name, gross_salary, pf_deduction=0, employer_pf=0, tax_deduction=0, description="Salary"):
-    """Record salary payment with proper journal entry.
+    """Record salary payment with proper compound journal entry.
 
-    Journal Entry:
-        Debit:  Salary Expense (gross)
-        Credit: Cash (net pay)
-        Credit: PF Payable (employee PF deduction)
-        Credit: PF Payable (employer PF contribution)
-        Credit: TDS Payable (TDS deducted)
+    Compound Journal Entry:
+        Dr Salary Expense   (gross_salary)
+            Cr Cash         (net = gross - pf_deduction - tax_deduction)
+            Cr PF Payable   (employee pf deduction)
+            Cr TDS Payable  (tax deducted)
+        Dr PF Expense     (employer_pf)
+            Cr PF Payable   (employer contribution)
 
     Args:
         date: Transaction date
@@ -545,6 +595,8 @@ def record_salary_payment(date, employee_name, gross_salary, pf_deduction=0, emp
         tax_deduction: TDS deducted from employee salary
         description: Additional description
     """
+    from models import JournalEntry, Transaction
+
     salary_expense = get_or_create_account('Salary Expense', 'expense')
     pf_expense = get_or_create_account('PF Expense', 'expense')
     cash_acc = get_or_create_account('Cash', 'asset')
@@ -555,22 +607,76 @@ def record_salary_payment(date, employee_name, gross_salary, pf_deduction=0, emp
         date = datetime.strptime(date, '%Y-%m-%d').date()
 
     net_salary = gross_salary - pf_deduction - tax_deduction
+    base_desc = f"Salary - {employee_name} - {description}"
 
-    # Dr Salary Expense (gross), Cr Cash (net pay)
-    if net_salary > 0:
-        create_journal_entry(date, f"Salary - {employee_name} - Net", salary_expense.id, cash_acc.id, net_salary)
+    # Create compound journal entry using no_commit version
+    journal = JournalEntry(
+        date=date,
+        description=base_desc,
+        debit_account_id=salary_expense.id,
+        credit_account_id=cash_acc.id,
+        amount=gross_salary,
+        is_posted=True
+    )
+    db.session.add(journal)
+    db.session.flush()
 
-    # Dr Salary Expense, Cr PF Payable (employee deduction)
+    # Line 1: Dr Salary Expense, Cr Cash (net pay)
+    txn1 = Transaction(date=date, description=base_desc + " (Net)",
+        account_id=salary_expense.id, debit=net_salary, credit=0, entry_type='debit',
+        is_posted=True, original_entry_id=journal.id)
+    txn2 = Transaction(date=date, description=base_desc + " (Net)",
+        account_id=cash_acc.id, debit=0, credit=net_salary, entry_type='credit',
+        is_posted=True, original_entry_id=journal.id)
+    db.session.add(txn1)
+    db.session.add(txn2)
+
+    # Line 2: Dr Salary Expense, Cr PF Payable (employee deduction)
     if pf_deduction > 0:
-        create_journal_entry(date, f"PF Deducted - {employee_name}", salary_expense.id, pf_payable.id, pf_deduction)
+        txn3 = Transaction(date=date, description=base_desc + " (PF Deducted)",
+            account_id=salary_expense.id, debit=pf_deduction, credit=0, entry_type='debit',
+            is_posted=True, original_entry_id=journal.id)
+        txn4 = Transaction(date=date, description=base_desc + " (PF Deducted)",
+            account_id=pf_payable.id, debit=0, credit=pf_deduction, entry_type='credit',
+            is_posted=True, original_entry_id=journal.id)
+        db.session.add(txn3)
+        db.session.add(txn4)
 
-    # Dr Salary Expense, Cr TDS Payable (TDS deducted)
+    # Line 3: Dr Salary Expense, Cr TDS Payable (TDS deducted)
     if tax_deduction > 0:
-        create_journal_entry(date, f"TDS Deducted - {employee_name}", salary_expense.id, tds_payable.id, tax_deduction)
+        txn5 = Transaction(date=date, description=base_desc + " (TDS Deducted)",
+            account_id=salary_expense.id, debit=tax_deduction, credit=0, entry_type='debit',
+            is_posted=True, original_entry_id=journal.id)
+        txn6 = Transaction(date=date, description=base_desc + " (TDS Deducted)",
+            account_id=tds_payable.id, debit=0, credit=tax_deduction, entry_type='credit',
+            is_posted=True, original_entry_id=journal.id)
+        db.session.add(txn5)
+        db.session.add(txn6)
 
-    # Employer PF: Dr PF Expense, Cr PF Payable (employer contribution)
+    # Line 4: Dr PF Expense, Cr PF Payable (employer contribution)
     if employer_pf > 0:
-        create_journal_entry(date, f"Employer PF - {employee_name}", pf_expense.id, pf_payable.id, employer_pf)
+        employer_desc = f"Employer PF - {employee_name}"
+        journal2 = JournalEntry(
+            date=date,
+            description=employer_desc,
+            debit_account_id=pf_expense.id,
+            credit_account_id=pf_payable.id,
+            amount=employer_pf,
+            is_posted=True
+        )
+        db.session.add(journal2)
+        db.session.flush()
+
+        txn7 = Transaction(date=date, description=employer_desc,
+            account_id=pf_expense.id, debit=employer_pf, credit=0, entry_type='debit',
+            is_posted=True, original_entry_id=journal2.id)
+        txn8 = Transaction(date=date, description=employer_desc,
+            account_id=pf_payable.id, debit=0, credit=employer_pf, entry_type='credit',
+            is_posted=True, original_entry_id=journal2.id)
+        db.session.add(txn7)
+        db.session.add(txn8)
+
+    db.session.commit()
 
     return {
         'type': 'salary',
@@ -726,4 +832,63 @@ def record_gst_payment(date, amount, payment_mode='bank', notes=''):
         'payment_mode': payment_mode,
         'notes': notes,
         'description': desc
+    }
+
+def run_monthly_depreciation(as_of_date=None):
+    """Run monthly depreciation for all fixed assets (straight-line method).
+
+    Calculates: monthly_dep = (cost - salvage_value) / (useful_life_years * 12)
+    Creates journal entry: Dr Depreciation Expense, Cr Accumulated Depreciation.
+    Avoids duplicate entries by checking for existing depreciation for asset+month.
+
+    Args:
+        as_of_date: Date for depreciation (defaults to today)
+
+    Returns:
+        dict with assets_processed, total_depreciation, errors
+    """
+    from datetime import date
+    from models import FixedAsset
+
+    if as_of_date is None:
+        as_of_date = date.today()
+
+    month_key = f"{as_of_date.year}-{as_of_date.month:02d}"
+
+    dep_expense = get_or_create_account('Depreciation Expense', 'expense')
+    accum_dep = get_or_create_account('Accumulated Depreciation', 'asset')
+
+    assets = FixedAsset.query.filter_by(is_active=True).all()
+
+    processed = []
+    total_dep = 0
+    errors = []
+
+    for asset in assets:
+        desc = f"Depreciation - {asset.name} - {month_key}"
+
+        existing = JournalEntry.query.filter(
+            JournalEntry.description.like(f"Depreciation - {asset.name}%")
+        ).all()
+        if any(month_key in (je.description or '') for je in existing):
+            continue
+
+        monthly_dep = (asset.cost - asset.salvage_value) / (asset.useful_life_years * 12)
+
+        if monthly_dep <= 0:
+            errors.append(f"{asset.name}: invalid depreciation calculation")
+            continue
+
+        create_journal_entry(as_of_date, desc, dep_expense.id, accum_dep.id, monthly_dep)
+
+        asset.accumulated_depreciation = (asset.accumulated_depreciation or 0) + monthly_dep
+
+        processed.append({'name': asset.name, 'depreciation': float(monthly_dep)})
+        total_dep += monthly_dep
+
+    return {
+        'assets_processed': processed,
+        'total_depreciation': float(total_dep),
+        'month': month_key,
+        'errors': errors
     }

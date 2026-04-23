@@ -14,6 +14,9 @@ def create_app(config_name=None):
     if config_name is None:
         config_name = os.environ.get('FLASK_ENV', 'development')
     
+    # Skip auto-init for testing
+    skip_init = os.environ.get('SKIP_INIT_DEFAULT_DATA', 'false').lower() == 'true'
+    
     app = Flask(__name__)
     cfg = config.get(config_name, config['development'])
     app.config.from_object(cfg)
@@ -52,7 +55,8 @@ def create_app(config_name=None):
     
     with app.app_context():
         db.create_all()
-        init_default_data()
+        if not skip_init:
+            init_default_data()
     
     return app
 
