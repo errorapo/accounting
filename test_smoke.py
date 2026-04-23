@@ -163,16 +163,9 @@ def run_tests():
     try:
         client = app.test_client()
         with app.app_context():
+            db.drop_all()
             db.create_all()
-
-            # Reset invoice sequence for this year
-            prefix = f"INV-2026"
-            existing = InvoiceSequence.query.filter_by(prefix=prefix).first()
-            if existing:
-                existing.last_number = 0
-            else:
-                db.session.add(InvoiceSequence(prefix=prefix, last_number=0))
-            db.session.commit()
+            init_default_data()
 
             user = User.query.filter_by(username='admin').first()
             customer = db.session.query(Customer).first()

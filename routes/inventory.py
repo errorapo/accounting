@@ -51,25 +51,13 @@ def edit_item(id):
 @bp.route('/inventory/purchase/<int:id>', methods=['GET', 'POST'])
 @login_required
 def purchase_item(id):
-    item = Inventory.query.get_or_404(id)
-    if request.method == 'POST':
-        quantity = float(request.form.get('quantity', 0))
-        item.purchases += quantity
-        item.closing_stock = item.opening_stock + item.purchases - item.sales
-        db.session.commit()
-        flash('Purchase recorded', 'success')
-        return redirect(url_for('inventory.index'))
-    return render_template('purchase_inventory.html', item=item)
+    """Direct inventory purchase recording — use /purchases/create for proper accounting."""
+    flash('Use Purchases > Create Purchase for proper double-entry accounting', 'error')
+    return redirect(url_for('inventory.index'))
 
 @bp.route('/inventory/sale/<int:id>', methods=['GET', 'POST'])
 @login_required
 def sale_item(id):
-    item = Inventory.query.get_or_404(id)
-    if request.method == 'POST':
-        quantity = float(request.form.get('quantity', 0))
-        item.sales += quantity
-        item.closing_stock = item.opening_stock + item.purchases - item.sales
-        db.session.commit()
-        flash('Sale recorded', 'success')
-        return redirect(url_for('inventory.index'))
-    return render_template('sale_inventory.html', item=item)
+    """Direct inventory sale recording — use /sales/create for proper double-entry accounting."""
+    flash('Use Sales > Create Sale for proper double-entry accounting', 'error')
+    return redirect(url_for('inventory.index'))

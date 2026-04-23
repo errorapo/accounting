@@ -44,6 +44,7 @@ def add_account():
 
 @bp.route('/accounts/delete/<int:id>')
 @login_required
+@admin_required
 def delete_account(id):
     account = Account.query.get_or_404(id)
     account.is_active = False
@@ -60,22 +61,31 @@ def ledger():
 
 @bp.route('/journal/add', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def add_journal():
     accounts = Account.query.filter_by(is_active=True).all()
-    
+
     if request.method == 'POST':
         date_str = request.form.get('date')
         description = request.form.get('description')
         debit_account_id = int(request.form.get('debit_account_id'))
         credit_account_id = int(request.form.get('credit_account_id'))
         amount = float(request.form.get('amount', 0))
-        
+
+        if amount <= 0:
+            flash('Amount must be greater than zero', 'error')
+            return render_template('add_journal.html', accounts=accounts)
+
+        if debit_account_id == credit_account_id:
+            flash('Debit and credit accounts must be different', 'error')
+            return render_template('add_journal.html', accounts=accounts)
+
         date = datetime.strptime(date_str, '%Y-%m-%d').date()
         create_journal_entry(date, description, debit_account_id, credit_account_id, amount)
-        
+
         flash('Journal entry added', 'success')
         return redirect(url_for('accounts.ledger'))
-    
+
     return render_template('add_journal.html', accounts=accounts)
 
 @bp.route('/journal/reverse/<int:id>', methods=['GET', 'POST'])

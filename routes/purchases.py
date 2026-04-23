@@ -3,8 +3,22 @@ from routes.dashboard import login_required
 from ext import db
 from models import Purchase, Inventory, Account, PurchasePayment
 from datetime import datetime, date
+from decimal import Decimal
 from accounting_engine import record_purchase, record_purchase_payment, create_journal_entry, get_or_create_account
 from validators import parse_positive_float, parse_non_negative_float, parse_gst_rate
+
+def admin_required(f):
+    from functools import wraps
+    from flask import session, flash, redirect, url_for
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('auth.login'))
+        if session.get('role') != 'admin':
+            flash('Admin access required', 'error')
+            return redirect(url_for('dashboard.index'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 bp = Blueprint('purchases', __name__)
 
@@ -56,8 +70,8 @@ def create_purchase():
             flash('Vendor is required', 'error')
             return render_template('create_purchase.html', inventory=inventory, vendors=vendors)
 
-        amount = quantity * rate
-        gst_amount = amount * (gst_rate / 100)
+        amount = Decimal(str(quantity)) * Decimal(str(rate))
+        gst_amount = amount * Decimal(str(gst_rate)) / Decimal('100')
         total_amount = amount + gst_amount
         payment_status = 'paid' if payment_type == 'cash' else 'pending'
 
@@ -83,7 +97,7 @@ def create_purchase():
 
         item = Inventory.query.filter_by(stone_type=stone_type, size=size).first()
         if item:
-            item.purchases += quantity
+            item.purchases += Decimal(str(quantity))
             item.closing_stock = item.opening_stock + item.purchases - item.sales
 
         record_purchase(date.today(), vendor_name, amount, gst_amount, itc_eligible, payment_type, f"{stone_type} {size}", quantity, stone_type, size)
@@ -168,6 +182,7 @@ def add_payment(id):
 
 @bp.route('/purchases/<int:id>/delete', methods=['POST'])
 @login_required
+@admin_required
 def delete_purchase(id):
     """Deleting posted purchase records is not allowed - use reversal journal entries instead."""
     flash('Purchase records cannot be deleted after posting. Use reversal journal entries to correct entries.', 'error')

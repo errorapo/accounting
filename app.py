@@ -23,12 +23,11 @@ def create_app(config_name=None):
     csrf = CSRFProtect(app)
     db.init_app(app)
     
-    redis_url = os.environ.get('REDIS_URL', 'memory://')
     limiter = Limiter(
         get_remote_address,
         app=app,
         default_limits=["200 per day", "50 per hour"],
-        storage_uri=redis_url
+        storage_uri="memory://"
     )
     
     @app.after_request
@@ -135,4 +134,5 @@ def init_default_data():
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    cfg_name = os.environ.get('FLASK_ENV', 'development')
+    app.run(debug=(cfg_name == 'development'), host='0.0.0.0', port=5000)

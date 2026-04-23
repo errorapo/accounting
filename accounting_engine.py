@@ -180,6 +180,10 @@ def reverse_journal_entry(entry_id, reversal_date=None, reversal_reason=""):
     if original.is_reversal:
         raise ValueError("This entry is already a reversal")
     
+    # Prevent reversal of opening balance entries
+    if original.description and 'Opening Balance' in original.description:
+        raise ValueError("Cannot reverse opening balance entries. Use the Opening Balances form to correct them.")
+
     date = reversal_date or datetime.now().date()
     reason = reversal_reason or f"Reversal of {original.description}"
     

@@ -3,6 +3,7 @@ from routes.dashboard import login_required
 from ext import db
 from models import Employee, Payroll, Attendance
 from datetime import datetime
+from decimal import Decimal
 from validators import parse_non_negative_float
 
 def admin_required(f):
@@ -90,19 +91,28 @@ def create_payroll():
             overtime_hours = parse_non_negative_float(request.form.get('overtime_hours', 0), 'Overtime hours')
             bonus          = parse_non_negative_float(request.form.get('bonus', 0), 'Bonus')
             insurance      = parse_non_negative_float(request.form.get('insurance', 0), 'Insurance')
+            tax_deduction  = parse_non_negative_float(request.form.get('tax_deduction', 0), 'Tax deduction')
         except ValueError as e:
             flash(str(e), 'error')
             return render_template('create_payroll.html', employees=employees)
-        
-        overtime_amount = overtime_hours * employee.hourly_rate * 1.5
-        gross_salary = (employee.base_salary + overtime_amount + 
-                     employee.transport_allowance + employee.food_allowance + 
-                     employee.housing_allowance + bonus)
-        
-        pf_employee = (employee.base_salary * employee.pf_rate) / 100
+
+        # Convert all to Decimal for safe arithmetic with Numeric columns
+        base = employee.base_salary
+        hourly = employee.hourly_rate
+        transport = employee.transport_allowance
+        food = employee.food_allowance
+        housing = employee.housing_allowance
+        pf_rate = employee.pf_rate
+
+        overtime_amount = Decimal(str(overtime_hours)) * Decimal(str(hourly)) * Decimal('1.5')
+        gross_salary = base + overtime_amount + transport + food + housing + Decimal(str(bonus))
+
+        pf_employee = base * Decimal(str(pf_rate)) / Decimal('100')
         pf_employer = pf_employee
-        tax_deduction = float(request.form.get('tax_deduction', 0))
-        total_deductions = pf_employee + tax_deduction + insurance
+        bonus_dec = Decimal(str(bonus))
+        tax_dec = Decimal(str(tax_deduction))
+        insurance_dec = Decimal(str(insurance))
+        total_deductions = pf_employee + tax_dec + insurance_dec
         net_salary = gross_salary - total_deductions
         
         month = request.form.get('month')
@@ -185,6 +195,9 @@ def mark_attendance(id, status):
         db.session.add(att)
     elif status == 'overtime':
         hours = float(request.args.get('hours', 0))
+        if hours < 0:
+            flash('Overtime hours cannot be negative', 'error')
+            return redirect(url_for('payroll.attendance'))
         if att:
             att.overtime_hours = hours
         else:
@@ -204,6 +217,9 @@ def add_overtime(id):
     
     if request.method == 'POST':
         hours = float(request.form.get('hours', 0))
+        if hours < 0:
+            flash('Overtime hours cannot be negative', 'error')
+            return redirect(url_for('payroll.attendance'))
         if att:
             att.overtime_hours = hours
         else:
