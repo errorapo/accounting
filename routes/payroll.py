@@ -110,7 +110,7 @@ def create_payroll():
         db.session.flush()
 
         from accounting_engine import record_salary_payment
-        record_salary_payment(date.today(), employee.name, gross_salary, pf_employee, pf_employer, f"Salary {month}")
+        record_salary_payment(date.today(), employee.name, gross_salary, pf_employee, pf_employer, tax_deduction, f"Salary {month}")
 
         db.session.commit()
         flash('Payroll created successfully', 'success')
@@ -235,19 +235,17 @@ def generate_payroll():
             continue
         
         days_present = 0
-        days_half_day = 0
         total_overtime = 0.0
-        
+
         for att in attendance_records:
             if att.half_day:
-                days_half_day += 0.5
-                days_present += 0.5
+                days_present += 0.5  # Half day = 0.5
             else:
                 days_present += 1
             total_overtime += att.overtime_hours or 0
-        
+
         daily_rate = emp.base_salary / 30
-        base = (days_present - days_half_day) * daily_rate
+        base = days_present * daily_rate
         
         overtime_amount = total_overtime * emp.hourly_rate * 1.5
         
@@ -281,7 +279,7 @@ def generate_payroll():
         db.session.flush()
 
         from accounting_engine import record_salary_payment
-        record_salary_payment(today, emp.name, gross, pf_employee, pf_employer, f"Monthly {month}")
+        record_salary_payment(today, emp.name, gross, pf_employee, pf_employer, 0, f"Monthly {month}")
 
         created_count += 1
 

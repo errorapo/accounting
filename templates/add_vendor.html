@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Add Vendor{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Add Vendor</h2>
+    <form method="post">
+        <div class="form-group">
+            <label>Vendor Name *</label>
+            <input type="text" name="name" required>
+        </div>
+        <div class="form-group">
+            <label>Phone</label>
+            <input type="text" name="phone">
+        </div>
+        <div class="form-group">
+            <label>Address</label>
+            <textarea name="address" rows="3"></textarea>
+        </div>
+        <div class="form-group">
+            <label>GSTIN</label>
+            <input type="text" name="gstin" placeholder="27AAAAA0000A1Z1">
+        </div>
+        <div class="form-group">
+            <label>State</label>
+            <input type="text" name="state" placeholder="Maharashtra">
+        </div>
+        <button type="submit" class="btn">Save Vendor</button>
+        <a href="{{ url_for('vendor.vendors_list') }}" class="btn btn-secondary">Cancel</a>
+    </form>
+</div>
+{% endblock %}

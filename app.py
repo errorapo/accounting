@@ -36,7 +36,7 @@ def create_app(config_name=None):
         response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
         return response
     
-    from routes import auth, dashboard, payroll, inventory, sales, purchases, accounts, reports
+    from routes import auth, dashboard, payroll, inventory, sales, purchases, accounts, reports, vendor
     app.register_blueprint(auth.bp)
     app.register_blueprint(dashboard.bp)
     app.register_blueprint(payroll.bp)
@@ -45,6 +45,7 @@ def create_app(config_name=None):
     app.register_blueprint(purchases.bp)
     app.register_blueprint(accounts.bp)
     app.register_blueprint(reports.bp)
+    app.register_blueprint(vendor.bp)
     
     with app.app_context():
         db.create_all()
@@ -53,15 +54,22 @@ def create_app(config_name=None):
     return app
 
 def init_default_data():
+    import os
     from models import User, Employee, Customer, Inventory, Sales, Payroll
     from datetime import date
     from accounting_engine import initialize_default_accounts
-    
+
+    # Get credentials from environment (fall back to .env values)
+    admin_user = os.environ.get('ADMIN_USERNAME', 'admin')
+    admin_pass = os.environ.get('ADMIN_PASSWORD', 'admin123')
+    accountant_user = os.environ.get('ACCOUNTANT_USERNAME', 'accountant')
+    accountant_pass = os.environ.get('ACCOUNTANT_PASSWORD', 'accountant123')
+
     if User.query.count() == 0:
-        default_user = User(username='admin', password_hash=generate_password_hash('admin123'), role='admin')
+        default_user = User(username=admin_user, password_hash=generate_password_hash(admin_pass), role='admin')
         db.session.add(default_user)
-        
-        accountant_user = User(username='accountant', password_hash=generate_password_hash('accountant123'), role='accountant')
+
+        accountant_user = User(username=accountant_user, password_hash=generate_password_hash(accountant_pass), role='accountant')
         db.session.add(accountant_user)
         db.session.commit()
     

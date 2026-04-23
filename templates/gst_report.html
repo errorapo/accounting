@@ -11,6 +11,8 @@
         <input type="date" name="end_date" value="{{ end_date }}">
         <button type="submit" class="btn">Generate</button>
     </form>
+
+    <h3 style="color: var(--accent-blue);">GST for Period</h3>
     <table>
         <tr>
             <td><strong>Output GST (Collected on Sales)</strong></td>
@@ -28,18 +30,37 @@
             <td style="padding-left: 40px;">  - ITC Non-Eligible</td>
             <td>₹{{ "%.2f"|format(itc_non_eligible_gst) }}</td>
         </tr>
-        <tr style="font-weight: bold; font-size: 18px; background: {% if net_gst > 0 %}#f8d7da{% else %}#d4edda{% endif %};">
-            <td>Net GST Payable/(ITC Receivable)</td>
+        <tr style="font-weight: bold; font-size: 18px;">
+            <td>GST for Period</td>
+            <td>₹{{ "%.2f"|format(output_gst - itc_eligible_gst) }}</td>
+        </tr>
+    </table>
+
+    <h3 style="color: var(--accent-blue); margin-top: 20px;">Cumulative GST Account Balances</h3>
+    <table>
+        <tr>
+            <td>GST Payable (Output GST collected)</td>
+            <td>₹{{ "%.2f"|format(gst_payable_balance) }}</td>
+        </tr>
+        <tr>
+            <td>GST Receivable (ITC claimed)</td>
+            <td>(₹{{ "%.2f"|format(gst_receivable_balance) }})</td>
+        </tr>
+        <tr style="border-top: 2px solid var(--accent-blue); font-weight: bold; font-size: 18px; background: {% if net_gst > 0 %}#f8d7da{% else %}#d4edda{% endif %};">
+            <td>Net GST Liability</td>
             <td>₹{{ "%.2f"|format(net_gst) }}</td>
         </tr>
     </table>
+
     {% if net_gst > 0 %}
-    <p style="color: red;">GST to be paid: ₹{{ "%.2f"|format(net_gst) }}</p>
+    <p style="color: red; font-size: 18px;">GST to be paid: <strong>₹{{ "%.2f"|format(net_gst) }}</strong></p>
+    <a href="{{ url_for('reports.gst_pay') }}" class="btn btn-success">Pay GST to Government</a>
     {% elif net_gst < 0 %}
-    <p style="color: green;">ITC available to claim: ₹{{ "%.2f"|format(net_gst|abs) }}</p>
+    <p style="color: green; font-size: 18px;">ITC available to carry forward: ₹{{ "%.2f"|format(net_gst|abs) }}</p>
     {% else %}
     <p style="color: blue;">No GST liability</p>
     {% endif %}
+
     <a href="{{ url_for('reports.index') }}" class="btn" style="margin-top: 15px;">Back to Reports</a>
 </div>
 {% endblock %}

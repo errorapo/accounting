@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, session, redirect, url_for
+from flask import Blueprint, render_template, request, session, redirect, url_for, flash
 from routes.dashboard import login_required
 from ext import db
 from models import Account, Transaction, Payroll, Sales, Inventory
@@ -46,8 +46,12 @@ def profit_loss():
     if start_date:
         start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
     else:
-        start_date = date(end_date.year, 1, 1)
-    
+        # Default to FY start (April 1 for India)
+        if end_date.month >= 4:
+            start_date = date(end_date.year, 4, 1)
+        else:
+            start_date = date(end_date.year - 1, 4, 1)
+
     income_stmt = get_income_statement(start_date, end_date)
     
     return render_template('profit_loss.html', 
@@ -85,6 +89,7 @@ def balance_sheet():
 @login_required
 def gst_report():
     from models import Purchase
+    from accounting_engine import get_account_balance, get_or_create_account
 
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
@@ -97,7 +102,11 @@ def gst_report():
     if start_date:
         start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
     else:
-        start_date = date(end_date.year, 1, 1)
+        # Default to FY start (April 1 for India)
+        if end_date.month >= 4:
+            start_date = date(end_date.year, 4, 1)
+        else:
+            start_date = date(end_date.year - 1, 4, 1)
 
     output_gst = db.session.query(func.sum(Sales.gst_amount)).filter(
         Sales.invoice_date >= start_date,
@@ -116,7 +125,17 @@ def gst_report():
     ).scalar() or 0
 
     itc_non_eligible_gst = input_gst_total - itc_eligible_gst
-    net_gst = output_gst - itc_eligible_gst
+
+    # FIXED: Use account balances (ITC offsets GST Payable)
+    gst_payable_acc = get_or_create_account('GST Payable', 'liability')
+    gst_receivable_acc = get_or_create_account('GST Receivable', 'asset')
+
+    # Get cumulative balances using the report date
+    gst_payable_balance = get_account_balance(gst_payable_acc.id, end_date)
+    gst_receivable_balance = get_account_balance(gst_receivable_acc.id, end_date)
+
+    # Net GST liability (Output GST - ITC claimed)
+    net_gst = gst_payable_balance - gst_receivable_balance
 
     return render_template('gst_report.html',
                     output_gst=output_gst,
@@ -126,7 +145,50 @@ def gst_report():
                     net_gst=net_gst,
                     start_date=start_date,
                     end_date=end_date,
-                    as_of_date=end_date)
+                    as_of_date=end_date,
+                    gst_payable_balance=gst_payable_balance,
+                    gst_receivable_balance=gst_receivable_balance)
+
+@bp.route('/reports/gst/pay', methods=['GET', 'POST'])
+@login_required
+def gst_pay():
+    """Pay GST to Government."""
+    from accounting_engine import record_gst_payment, get_or_create_account, get_account_balance
+
+    if request.method == 'POST':
+        amount = float(request.form.get('amount', 0))
+        payment_mode = request.form.get('payment_mode', 'bank')
+        notes = request.form.get('notes', '')
+
+        if amount <= 0:
+            flash('Amount must be positive', 'error')
+            return redirect(url_for('reports.gst_report'))
+
+        # Get current GST liability
+        gst_payable_acc = get_or_create_account('GST Payable', 'liability')
+        current_liability = get_account_balance(gst_payable_acc.id)
+
+        if amount > current_liability:
+            flash(f'Amount exceeds GST liability of ₹{current_liability:.2f}', 'error')
+            return redirect(url_for('reports.gst_report'))
+
+        # Record the payment
+        record_gst_payment(date.today(), amount, payment_mode, notes)
+        flash(f'GST payment of ₹{amount:.2f} recorded', 'success')
+        return redirect(url_for('reports.gst_report'))
+
+    # GET - show payment form
+    gst_payable_acc = get_or_create_account('GST Payable', 'liability')
+    gst_receivable_acc = get_or_create_account('GST Receivable', 'asset')
+
+    gst_payable = get_account_balance(gst_payable_acc.id)
+    gst_receivable = get_account_balance(gst_receivable_acc.id)
+    net_liability = gst_payable - gst_receivable
+
+    return render_template('gst_payment.html',
+                    net_liability=net_liability,
+                    gst_payable=gst_payable,
+                    gst_receivable=gst_receivable)
 
 @bp.route('/reports/payroll-summary')
 @login_required

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Pay GST{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Pay GST to Government</h2>
+
+    <div style="background: var(--bg-dark); padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+        <h3 style="color: var(--accent-blue); margin-bottom: 10px;">GST Liability Summary</h3>
+        <table style="width: 100%;">
+            <tr>
+                <td>GST Collected (Output GST)</td>
+                <td style="text-align: right;">₹{{ "%.2f"|format(gst_payable) }}</td>
+            </tr>
+            <tr>
+                <td>Less: ITC Claimed (GST Receivable)</td>
+                <td style="text-align: right; color: green;">-₹{{ "%.2f"|format(gst_receivable) }}</td>
+            </tr>
+            <tr style="border-top: 2px solid var(--accent-blue);">
+                <td><strong>Net GST Liability</strong></td>
+                <td style="text-align: right; font-size: 18px;"><strong>₹{{ "%.2f"|format(net_liability) }}</strong></td>
+            </tr>
+        </table>
+    </div>
+
+    {% if net_liability <= 0 %}
+    <p style="color: green; font-size: 18px;">No GST liability - you have ITC credit to carry forward!</p>
+    {% elif net_liability > 0 %}
+    <form method="POST">
+        <div class="form-group">
+            <label>Amount to Pay</label>
+            <input type="number" name="amount" step="0.01" value="{{ net_liability }}" required>
+        </div>
+        <div class="form-group">
+            <label>Payment Mode</label>
+            <select name="payment_mode">
+                <option value="bank">Bank Transfer</option>
+                <option value="cash">Cash</option>
+                <option value="upi">UPI</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Notes (optional)</label>
+            <input type="text" name="notes" placeholder="e.g. GST for March 2024">
+        </div>
+        <button type="submit" class="btn btn-success">Pay GST</button>
+        <a href="{{ url_for('reports.gst_report') }}" class="btn">Cancel</a>
+    </form>
+    {% endif %}
+
+    <div style="margin-top: 20px;">
+        <a href="{{ url_for('reports.gst_report') }}">Back to GST Report</a>
+    </div>
+</div>
+{% endblock %}

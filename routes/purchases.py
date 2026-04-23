@@ -3,7 +3,7 @@ from routes.dashboard import login_required
 from ext import db
 from models import Purchase, Inventory, Account, PurchasePayment
 from datetime import datetime, date
-from accounting_engine import record_purchase, create_journal_entry, get_or_create_account
+from accounting_engine import record_purchase, record_purchase_payment, create_journal_entry, get_or_create_account
 
 bp = Blueprint('purchases', __name__)
 
@@ -28,9 +28,12 @@ def purchases_list():
 @bp.route('/purchases/create', methods=['GET', 'POST'])
 @login_required
 def create_purchase():
+    from models import Vendor
     inventory = Inventory.query.all()
+    vendors = Vendor.query.filter_by(is_active=True).all()
 
     if request.method == 'POST':
+        vendor_id = request.form.get('vendor_id')
         vendor_name = request.form.get('vendor_name', '').strip()
         payment_type = request.form.get('payment_type', 'cash')
         stone_type = request.form.get('stone_type')
@@ -40,9 +43,13 @@ def create_purchase():
         gst_rate = float(request.form.get('gst_rate', 5))
         itc_eligible = request.form.get('itc_eligible') == '1'
 
-        if not vendor_name:
-            flash('Vendor name is required', 'error')
-            return render_template('create_purchase.html', inventory=inventory)
+        if vendor_id:
+            vendor = Vendor.query.get(vendor_id)
+            if vendor:
+                vendor_name = vendor.name
+        elif not vendor_name:
+            flash('Vendor is required', 'error')
+            return render_template('create_purchase.html', inventory=inventory, vendors=vendors)
 
         amount = quantity * rate
         gst_amount = amount * (gst_rate / 100)
@@ -51,6 +58,7 @@ def create_purchase():
 
         purchase = Purchase(
             invoice_number=generate_purchase_invoice_number(),
+            vendor_id=int(vendor_id) if vendor_id else None,
             vendor_name=vendor_name,
             stone_type=stone_type,
             size=size,
@@ -73,13 +81,13 @@ def create_purchase():
             item.purchases += quantity
             item.closing_stock = item.opening_stock + item.purchases - item.sales
 
-        record_purchase(date.today(), vendor_name, amount, gst_amount, payment_type, f"{stone_type} {size}", quantity, stone_type, size)
+        record_purchase(date.today(), vendor_name, amount, gst_amount, itc_eligible, payment_type, f"{stone_type} {size}", quantity, stone_type, size)
 
         db.session.commit()
         flash(f'Purchase created successfully - {purchase.invoice_number}', 'success')
         return redirect(url_for('purchases.purchases_list'))
 
-    return render_template('create_purchase.html', inventory=inventory)
+    return render_template('create_purchase.html', inventory=inventory, vendors=vendors)
 
 @bp.route('/purchases/<int:id>/mark-paid')
 @login_required
@@ -97,10 +105,11 @@ def mark_paid(id):
     purchase.payment_status = 'paid'
 
     payable_acc = get_or_create_account('Accounts Payable', 'liability')
-    cash_acc = get_or_create_account('Cash', 'asset')
-    if payable_acc and cash_acc:
+    # Use Bank for all non-cash payments (bank transfer, UPI, etc)
+    bank_acc = get_or_create_account('Bank', 'asset')
+    if payable_acc and bank_acc:
         create_journal_entry(date.today(), f"Purchase Payment: {purchase.invoice_number}",
-                            payable_acc.id, cash_acc.id, purchase.total_amount)
+                            payable_acc.id, bank_acc.id, purchase.total_amount)
 
     db.session.commit()
     flash('Purchase payment recorded', 'success')
@@ -139,10 +148,7 @@ def add_payment(id):
         )
         db.session.add(payment)
 
-        payable_acc = get_or_create_account('Accounts Payable', 'liability')
-        cash_acc = get_or_create_account('Cash', 'asset')
-        create_journal_entry(date.today(), f"Purchase Payment: {purchase.invoice_number}",
-                            payable_acc.id, cash_acc.id, amount)
+        record_purchase_payment(date.today(), purchase.id, amount, payment_mode, notes, f"Payment: {purchase.invoice_number}")
 
         if paid_total >= purchase.total_amount - 0.01:
             purchase.payment_status = 'paid'
@@ -158,10 +164,8 @@ def add_payment(id):
 @bp.route('/purchases/<int:id>/delete', methods=['POST'])
 @login_required
 def delete_purchase(id):
-    purchase = Purchase.query.get_or_404(id)
-    db.session.delete(purchase)
-    db.session.commit()
-    flash('Purchase deleted', 'success')
+    """Deleting posted purchase records is not allowed - use reversal journal entries instead."""
+    flash('Purchase records cannot be deleted after posting. Use reversal journal entries to correct entries.', 'error')
     return redirect(url_for('purchases.purchases_list'))
 
 @bp.route('/purchases/<int:id>/invoice')

@@ -26,7 +26,7 @@
                 <td>
                     <a href="{{ url_for('purchases.invoice', id=purchase.id) }}">{{ purchase.invoice_date }}</a>
                 </td>
-                <td>{{ purchase.vendor_name }}</td>
+                <td>{{ purchase.vendor.name if purchase.vendor else purchase.vendor_name }}</td>
                 <td>{{ purchase.stone_type }}</td>
                 <td>{{ purchase.size }}</td>
                 <td>{{ purchase.quantity }}</td>

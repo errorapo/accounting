@@ -111,33 +111,40 @@ def opening_balances():
         payables = float(request.form.get('payables', 0))
         loans = float(request.form.get('loans', 0))
 
+        # Use Opening Balance Equity clearing account for all opening balances
+        opening_eq = get_or_create_account('Opening Balance Equity', 'capital')
+
+        # Assets: Dr Asset, Cr Opening Balance Equity
         if capital > 0:
+            # Owner investment: Dr Cash, Cr Capital (owner's equity)
             create_journal_entry(balance_date, "Opening Balance - Capital",
                 get_or_create_account('Cash', 'asset').id,
                 get_or_create_account('Capital', 'capital').id, capital)
         if cash > 0:
             create_journal_entry(balance_date, "Opening Balance - Cash",
                 get_or_create_account('Cash', 'asset').id,
-                get_or_create_account('Capital', 'capital').id, cash)
+                opening_eq.id, cash)
         if bank > 0:
             create_journal_entry(balance_date, "Opening Balance - Bank",
                 get_or_create_account('Bank', 'asset').id,
-                get_or_create_account('Capital', 'capital').id, bank)
+                opening_eq.id, bank)
         if receivables > 0:
             create_journal_entry(balance_date, "Opening Balance - Receivables",
                 get_or_create_account('Accounts Receivable', 'asset').id,
-                get_or_create_account('Capital', 'capital').id, receivables)
+                opening_eq.id, receivables)
         if inventory > 0:
             create_journal_entry(balance_date, "Opening Balance - Inventory",
                 get_or_create_account('Inventory', 'asset').id,
-                get_or_create_account('Capital', 'capital').id, inventory)
+                opening_eq.id, inventory)
+
+        # Liabilities: Dr Opening Balance Equity, Cr Liability
         if payables > 0:
-            create_journal_entry(balance_date, "Opening Balance - Payables",
-                get_or_create_account('Capital', 'capital').id,
+            create_journal_entry(balance_date, "Opening Balance - Accounts Payable",
+                opening_eq.id,
                 get_or_create_account('Accounts Payable', 'liability').id, payables)
         if loans > 0:
-            create_journal_entry(balance_date, "Opening Balance - Loans",
-                get_or_create_account('Capital', 'capital').id,
+            create_journal_entry(balance_date, "Opening Balance - Loans Payable",
+                opening_eq.id,
                 get_or_create_account('Loans Payable', 'liability').id, loans)
 
         flash('Opening balances entered successfully', 'success')

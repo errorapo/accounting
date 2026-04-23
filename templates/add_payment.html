@@ -8,7 +8,7 @@
     <p><strong>Total:</strong> ₹{{ "%.2f"|format(sale.total_amount) }} | <strong>Paid:</strong> ₹{{ "%.2f"|format(paid) }} | <strong>Outstanding:</strong> ₹{{ "%.2f"|format(outstanding) }}</p>
     <form method="POST" action="{{ url_for('sales.add_payment', id=sale.id) }}">
     {% elif purchase %}
-    <p><strong>Invoice:</strong> {{ purchase.invoice_number }} | <strong>Vendor:</strong> {{ purchase.vendor_name }}</p>
+    <p><strong>Invoice:</strong> {{ purchase.invoice_number }} | <strong>Vendor:</strong> {{ purchase.vendor.name if purchase.vendor else purchase.vendor_name }}</p>
     <p><strong>Total:</strong> ₹{{ "%.2f"|format(purchase.total_amount) }} | <strong>Paid:</strong> ₹{{ "%.2f"|format(paid) }} | <strong>Outstanding:</strong> ₹{{ "%.2f"|format(outstanding) }}</p>
     <form method="POST" action="{{ url_for('purchases.add_payment', id=purchase.id) }}">
     {% endif %}

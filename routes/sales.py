@@ -112,7 +112,7 @@ def create_sale():
             item.sales += quantity
             item.closing_stock = item.opening_stock + item.purchases - item.sales
 
-        record_sale(date.today(), f"INV-{sale.id}", total_amount, payment_type, f"{stone_type} {size}", quantity, stone_type, size)
+        record_sale(date.today(), f"INV-{sale.id}", amount, gst_amount, payment_type, f"{stone_type} {size}", quantity, stone_type, size)
 
         db.session.commit()
         flash(f'Sale created successfully - Invoice: {sale.invoice_number}', 'success')

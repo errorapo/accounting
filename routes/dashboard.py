@@ -25,7 +25,9 @@ def index():
     total_employees = Employee.query.filter_by(is_active=True).count()
     total_inventory = Inventory.query.count()
     
-    monthly_sales = db.session.query(func.sum(Sales.total_amount)).scalar() or 0
+    monthly_sales = db.session.query(func.sum(Sales.total_amount)).filter(
+        func.strftime('%Y-%m', Sales.invoice_date) == func.strftime('%Y-%m', datetime.now())
+    ).scalar() or 0
     
     today = db.session.query(func.sum(Transaction.debit)).filter(
         Transaction.entry_type == 'debit'
@@ -51,7 +53,9 @@ def admin_dashboard():
     total_customers = Customer.query.count()
     total_inventory = Inventory.query.count()
     
-    monthly_sales = db.session.query(func.sum(Sales.total_amount)).scalar() or 0
+    monthly_sales = db.session.query(func.sum(Sales.total_amount)).filter(
+        func.strftime('%Y-%m', Sales.invoice_date) == func.strftime('%Y-%m', datetime.now())
+    ).scalar() or 0
     total_salary = db.session.query(func.sum(Payroll.net_salary)).scalar() or 0
     
     recent_sales = Sales.query.order_by(Sales.created_at.desc()).limit(5).all()
@@ -105,7 +109,9 @@ def accountant_dashboard():
     total_customers = Customer.query.count()
     total_inventory = Inventory.query.count()
 
-    monthly_sales = db.session.query(func.sum(Sales.total_amount)).scalar() or 0
+    monthly_sales = db.session.query(func.sum(Sales.total_amount)).filter(
+        func.strftime('%Y-%m', Sales.invoice_date) == func.strftime('%Y-%m', datetime.now())
+    ).scalar() or 0
     total_salary = db.session.query(func.sum(Payroll.net_salary)).scalar() or 0
 
     recent_sales = Sales.query.order_by(Sales.created_at.desc()).limit(5).all()

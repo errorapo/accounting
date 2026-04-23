@@ -195,7 +195,63 @@
 
 </div>
 
+<<<<<<< HEAD
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+=======
+{% if inventory_low %}
+<div class="alert-box">
+    <h3>Low Stock Alert!</h3>
+    <p>The following items have low stock (less than 20 tons):</p>
+    <ul>
+    {% for item in inventory_low %}
+        <li>{{ item.stone_type }} - {{ item.size }}: {{ item.closing_stock }} tons</li>
+    {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<div class="chart-row">
+    <div class="chart-container">
+        <h3 style="color: var(--accent-blue); margin-bottom: 15px;">Sales Trends</h3>
+        <canvas id="salesChart" height="200"></canvas>
+    </div>
+    <div class="chart-container">
+        <h3 style="color: var(--accent-blue); margin-bottom: 15px;">Salary Expenses by Month</h3>
+        <canvas id="salaryChart" height="200"></canvas>
+    </div>
+</div>
+
+<div class="chart-row">
+    <div class="chart-container">
+        <h3 style="color: var(--accent-blue); margin-bottom: 15px;">Revenue vs Expenses</h3>
+        <canvas id="revenueChart" height="200"></canvas>
+    </div>
+    <div class="chart-container">
+        <h3 style="color: var(--accent-blue); margin-bottom: 15px;">Top Customers by Purchase</h3>
+        <canvas id="customerChart" height="200"></canvas>
+    </div>
+</div>
+
+<div class="chart-row">
+    <div class="chart-container" style="grid-column: span 2;">
+        <h3 style="color: var(--accent-blue); margin-bottom: 15px;">Recent Sales</h3>
+        <table style="font-size: 14px; width: 100%;">
+            <tr><th>Date</th><th>Customer</th><th>Stone</th><th>Size</th><th>Amount</th></tr>
+            {% for s in recent_sales %}
+            <tr>
+                <td>{{ s.invoice_date }}</td>
+                <td>{{ s.customer.name if s.customer else s.customer_id }}</td>
+                <td>{{ s.stone_type }}</td>
+                <td>{{ s.size }}</td>
+                <td>₹{{ "%.0f"|format(s.total_amount) }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+>>>>>>> 9d69682 (..)
 <script>
 const salesByMonth  = {{ sales_by_month | tojson }};
 const salaryByMonth = {{ salary_by_month | tojson }};
