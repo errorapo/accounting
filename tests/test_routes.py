@@ -252,3 +252,101 @@ def test_reversal_of_reversal_is_rejected(app_context, auth_client):
                 reverse_journal_entry(reversal.id)
         else:
             assert True
+
+
+def test_purchase_create_valid(auth_client, app_context):
+    """Valid purchase is accepted and recorded."""
+    client = auth_client
+    with app_context.app_context():
+        from models import Vendor, Inventory, Purchase
+        vendor = Vendor.query.first()
+        if vendor is None:
+            vendor = Vendor(name='Test Vendor', phone='9999999999', state='Kerala')
+            db.session.add(vendor)
+            db.session.commit()
+        item = Inventory.query.first()
+        vendor_id = vendor.id
+        stone_type = item.stone_type
+        size = item.size
+
+    response = client.post('/purchases/create', data={
+        'vendor_id': str(vendor_id),
+        'stone_type': stone_type,
+        'size': size,
+        'quantity': '10',
+        'rate': '500',
+        'gst_rate': '5',
+        'payment_type': 'cash',
+        'itc_eligible': '1',
+        'supply_type': 'intra'
+    }, follow_redirects=True)
+
+    assert response.status_code == 200
+    with app_context.app_context():
+        purchase = Purchase.query.first()
+        assert purchase is not None, "Purchase should have been created"
+
+
+def test_purchase_rejects_negative_quantity(auth_client, app_context):
+    """Purchase with negative quantity is rejected."""
+    client = auth_client
+    with app_context.app_context():
+        from models import Vendor
+        vendor = Vendor.query.first()
+        if vendor is None:
+            vendor = Vendor(name='Test Vendor', phone='9999999999', state='Kerala')
+            db.session.add(vendor)
+            db.session.commit()
+        vendor_id = vendor.id
+
+    response = client.post('/purchases/create', data={
+        'vendor_id': str(vendor_id),
+        'stone_type': 'Granite',
+        'size': '20mm',
+        'quantity': '-10',
+        'rate': '500',
+        'gst_rate': '5',
+        'payment_type': 'cash'
+    }, follow_redirects=False)
+
+    with app_context.app_context():
+        from models import Purchase
+        bad_purchase = Purchase.query.first()
+
+    assert bad_purchase is None, "Negative quantity purchase should be rejected"
+
+
+def test_payment_cannot_exceed_invoice(auth_client, app_context):
+    """Payment exceeding invoice total is rejected."""
+    client = auth_client
+    with app_context.app_context():
+        from models import Customer, Inventory, Sales
+        customer = Customer.query.first()
+        item = Inventory.query.first()
+
+    response = client.post('/sales/create', data={
+        'customer_id': str(customer.id),
+        'stone_type': item.stone_type,
+        'size': item.size,
+        'quantity': '1',
+        'rate': '1000',
+        'gst_rate': '5',
+        'payment_type': 'credit',
+        'supply_type': 'intra'
+    }, follow_redirects=True)
+
+    with app_context.app_context():
+        sale = Sales.query.order_by(Sales.id.desc()).first()
+        assert sale is not None
+
+    response = client.post(f'/sales/{sale.id}/payment', data={
+        'amount': '99999',
+        'payment_mode': 'cash',
+        'notes': 'overpayment test'
+    }, follow_redirects=False)
+
+    assert response.status_code == 302, "Overpayment should be rejected with a redirect"
+    with app_context.app_context():
+        from models import Payment
+        overpayment = Payment.query.filter_by(sale_id=sale.id).first()
+        assert overpayment is None, "Overpayment should not be recorded"

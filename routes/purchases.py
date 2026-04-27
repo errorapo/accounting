@@ -1,8 +1,8 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file
+from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, session
 from routes.dashboard import login_required
 from routes.auth_utils import admin_required
 from ext import db
-from models import Purchase, Inventory, Account, PurchasePayment
+from models import Purchase, Inventory, Account, PurchasePayment, InvoiceSequence
 from datetime import datetime, date
 from decimal import Decimal
 from accounting_engine import record_purchase, record_purchase_payment, create_journal_entry, get_or_create_account
@@ -86,7 +86,8 @@ def create_purchase():
             payment_type=payment_type,
             payment_status=payment_status,
             itc_eligible=itc_eligible,
-            invoice_date=date.today()
+            invoice_date=date.today(),
+            created_by=session.get('user_id')
         )
         db.session.add(purchase)
         db.session.flush()

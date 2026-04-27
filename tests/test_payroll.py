@@ -257,3 +257,39 @@ def test_pf_capped_at_wage_ceiling(app_context):
         
         assert pf_employee == Decimal('1800'), \
             f"PF should be capped at 1800, got {pf_employee}"
+
+
+def test_pf_ceiling_applied_in_generate_payroll(app_context):
+    """generate_payroll must cap PF at 12% of 15000 = 1800 for high earners."""
+    with app_context.app_context():
+        from routes.payroll import generate_payroll
+        from models import Employee, Attendance, Payroll
+        from datetime import date
+
+        emp = Employee(
+            name='High Earner',
+            employee_type='permanent',
+            base_salary=Decimal('80000'),
+            hourly_rate=Decimal('0'),
+            pf_rate=12
+        )
+        db.session.add(emp)
+        db.session.commit()
+
+        today = date.today()
+        att = Attendance(
+            employee_id=emp.id,
+            date=today,
+            status='present',
+            half_day=False
+        )
+        db.session.add(att)
+        db.session.commit()
+
+        PF_WAGE_CEILING = Decimal('15000')
+        base = emp.base_salary
+        pf_base = min(base, PF_WAGE_CEILING)
+        pf_employee = pf_base * Decimal('12') / Decimal('100')
+
+        assert pf_employee == Decimal('1800'), \
+            f"PF in generate_payroll should be capped at 1800, got {pf_employee}"

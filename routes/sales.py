@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file
+from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file, session
 from routes.dashboard import login_required
 from routes.auth_utils import admin_required
 from ext import db
@@ -139,7 +139,8 @@ def create_sale():
             total_amount=total_amount,
             payment_type=payment_type,
             payment_status=payment_status,
-            invoice_date=date.today()
+            invoice_date=date.today(),
+            created_by=session.get('user_id')
         )
         db.session.add(sale)
         db.session.flush()
@@ -147,7 +148,7 @@ def create_sale():
         item = Inventory.query.filter_by(stone_type=stone_type, size=size).with_for_update().first()
         if item:
             item.sales += Decimal(str(quantity))
-            item.closing_stock = item.opening_stock + item.purchases - item.sales
+            item.closing_stock = item.closing_stock - Decimal(str(quantity))
 
         # Atomic journal entries (no commit inside)
         sales_acc = get_or_create_account('Sales Revenue', 'income')
@@ -203,10 +204,11 @@ def add_payment(id):
             flash('Amount must be positive', 'error')
             return render_template('add_payment.html', sale=sale)
 
-        paid_total = sum(p.amount for p in sale.payments) + amount
-        if paid_total > sale.total_amount:
-            flash(f'Payment exceeds outstanding. Outstanding: ₹{sale.total_amount - sum(p.amount for p in sale.payments):.2f}', 'error')
-            return render_template('add_payment.html', sale=sale)
+        invoice = Sales.query.get_or_404(id)
+        total_paid = sum(p.amount for p in invoice.payments)
+        if total_paid + Decimal(str(amount)) > invoice.total_amount:
+            flash('Payment exceeds invoice amount', 'error')
+            return redirect(url_for('sales.sales_list'))
 
         payment = Payment(
             sale_id=sale.id,
@@ -219,7 +221,7 @@ def add_payment(id):
 
         record_payment(date.today(), sale.id, amount, payment_mode, notes, f"Payment: {sale.invoice_number}")
 
-        if paid_total >= sale.total_amount - 0.01:
+        if total_paid + Decimal(str(amount)) >= sale.total_amount - 0.01:
             sale.payment_status = 'paid'
 
         db.session.commit()

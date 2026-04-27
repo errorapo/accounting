@@ -6,6 +6,7 @@ FIXED: Income Statement now uses period transactions (not cumulative)
 FIXED: Balance Sheet retained earnings accumulates all prior profits
 FIXED: Support for credit sales (Accounts Receivable)
 """
+from decimal import Decimal
 from ext import db
 from models import Account, Transaction, JournalEntry
 from datetime import datetime, date, timedelta
@@ -98,7 +99,7 @@ def get_period_balance(account_id, start_date=None, end_date=None):
     else:
         return total_credit - total_debit
 
-def create_journal_entry(date, description, debit_account_id, credit_account_id, amount, is_posted=True):
+def create_journal_entry(date, description, debit_account_id, credit_account_id, amount, is_posted=True, created_by=None):
     """Create a journal entry with debit and credit."""
     if amount <= 0:
         raise ValueError("Amount must be positive")
@@ -109,7 +110,8 @@ def create_journal_entry(date, description, debit_account_id, credit_account_id,
         debit_account_id=debit_account_id,
         credit_account_id=credit_account_id,
         amount=amount,
-        is_posted=is_posted
+        is_posted=is_posted,
+        created_by=created_by
     )
     db.session.add(journal)
     db.session.flush()
@@ -122,7 +124,8 @@ def create_journal_entry(date, description, debit_account_id, credit_account_id,
         credit=0,
         entry_type='debit',
         is_posted=is_posted,
-        original_entry_id=journal.id
+        original_entry_id=journal.id,
+        created_by=created_by
     )
     credit_txn = Transaction(
         date=date,
@@ -132,7 +135,8 @@ def create_journal_entry(date, description, debit_account_id, credit_account_id,
         credit=amount,
         entry_type='credit',
         is_posted=is_posted,
-        original_entry_id=journal.id
+        original_entry_id=journal.id,
+        created_by=created_by
     )
     db.session.add(debit_txn)
     db.session.add(credit_txn)
@@ -140,7 +144,7 @@ def create_journal_entry(date, description, debit_account_id, credit_account_id,
     db.session.commit()
     return journal
 
-def create_journal_entry_no_commit(date, description, debit_account_id, credit_account_id, amount):
+def create_journal_entry_no_commit(date, description, debit_account_id, credit_account_id, amount, created_by=None):
     if amount <= 0:
         raise ValueError("Amount must be positive")
 
@@ -150,7 +154,8 @@ def create_journal_entry_no_commit(date, description, debit_account_id, credit_a
         debit_account_id=debit_account_id,
         credit_account_id=credit_account_id,
         amount=amount,
-        is_posted=True
+        is_posted=True,
+        created_by=created_by
     )
     db.session.add(journal)
     db.session.flush()
@@ -159,13 +164,15 @@ def create_journal_entry_no_commit(date, description, debit_account_id, credit_a
         date=date, description=description,
         account_id=debit_account_id,
         debit=amount, credit=0, entry_type='debit',
-        is_posted=True, original_entry_id=journal.id
+        is_posted=True, original_entry_id=journal.id,
+        created_by=created_by
     ))
     db.session.add(Transaction(
         date=date, description=description,
         account_id=credit_account_id,
         debit=0, credit=amount, entry_type='credit',
-        is_posted=True, original_entry_id=journal.id
+        is_posted=True, original_entry_id=journal.id,
+        created_by=created_by
     ))
     return journal
 
@@ -564,14 +571,14 @@ def record_purchase(date, vendor_name, amount, gst_amount, itc_eligible=True, pa
 
     # Update inventory weighted average cost
     if is_inventory_purchase and item:
-        unit_cost = amount / quantity if quantity > 0 else 0
-        new_stock = (item.closing_stock or 0) + quantity
-        new_total_cost = (item.closing_stock or 0) * (item.rate_per_ton or 0) + quantity * unit_cost
+        unit_cost = amount / Decimal(str(quantity)) if quantity > 0 else Decimal('0')
+        new_stock = (item.closing_stock or 0) + Decimal(str(quantity))
+        new_total_cost = (item.closing_stock or 0) * (item.rate_per_ton or 0) + Decimal(str(quantity)) * unit_cost
         if new_stock > 0:
             item.rate_per_ton = new_total_cost / new_stock
         item.total_cost = new_total_cost
         item.closing_stock = new_stock
-        item.purchases = (item.purchases or 0) + quantity
+        item.purchases = (item.purchases or 0) + Decimal(str(quantity))
 
     return {
         'type': 'purchase',

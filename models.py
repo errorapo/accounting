@@ -49,6 +49,7 @@ class Payroll(db.Model):
     total_deductions = db.Column(db.Numeric(precision=15, scale=2), default=0)
     net_salary = db.Column(db.Numeric(precision=15, scale=2), default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
 
     employee = db.relationship('Employee', backref='payroll_records')
 
@@ -101,6 +102,7 @@ class Sales(db.Model):
     payment_status = db.Column(db.String(20), default='paid')
     invoice_date = db.Column(db.Date, default=datetime.utcnow().date)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
 
     customer = db.relationship('Customer', backref='sales_records')
 
@@ -114,6 +116,7 @@ class Purchase(db.Model):
     quantity = db.Column(db.Numeric(precision=15, scale=3))
     rate = db.Column(db.Numeric(precision=15, scale=2))
     amount = db.Column(db.Numeric(precision=15, scale=2))
+    total_amount = db.Column(db.Numeric(precision=15, scale=2))
     gst_rate = db.Column(db.Numeric(precision=5, scale=2), default=5)
     gst_amount = db.Column(db.Numeric(precision=15, scale=2), default=0)
     cgst_amount = db.Column(db.Numeric(precision=15, scale=2), default=0)
@@ -125,6 +128,7 @@ class Purchase(db.Model):
     itc_eligible = db.Column(db.Boolean, default=True)
     invoice_date = db.Column(db.Date, default=datetime.utcnow().date)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
 
     vendor = db.relationship('Vendor', backref='purchase_records')
 
@@ -168,6 +172,7 @@ class Transaction(db.Model):
     is_reversal = db.Column(db.Boolean, default=False)
     original_entry_id = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
 
 class FixedAsset(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -191,6 +196,7 @@ class JournalEntry(db.Model):
     is_reversal = db.Column(db.Boolean, default=False)
     original_entry_id = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
 
 class InvoiceSequence(db.Model):
     id          = db.Column(db.Integer, primary_key=True)

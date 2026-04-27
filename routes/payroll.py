@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from routes.dashboard import login_required
 from routes.auth_utils import admin_required
 from ext import db
@@ -125,7 +125,8 @@ def create_payroll():
             tax_deduction=tax_deduction,
             insurance=insurance,
             total_deductions=total_deductions,
-            net_salary=net_salary
+            net_salary=net_salary,
+            created_by=session.get('user_id')
         )
         db.session.add(payroll)
         db.session.flush()
@@ -279,7 +280,10 @@ def generate_payroll():
         
         gross = base + overtime_amount + emp.transport_allowance + emp.food_allowance + emp.housing_allowance
         
-        pf_employee = (base * emp.pf_rate) / 100
+        from decimal import Decimal
+        PF_WAGE_CEILING = Decimal('15000')
+        pf_base = min(Decimal(str(base)), PF_WAGE_CEILING)
+        pf_employee = (pf_base * Decimal(str(emp.pf_rate))) / Decimal('100')
         pf_employer = pf_employee
         total_deductions = pf_employee
         net = gross - total_deductions
@@ -301,7 +305,8 @@ def generate_payroll():
             tax_deduction=0,
             insurance=0,
             total_deductions=total_deductions,
-            net_salary=net
+            net_salary=net,
+            created_by=session.get('user_id')
         )
         db.session.add(payroll)
         db.session.flush()
