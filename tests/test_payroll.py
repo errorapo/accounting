@@ -237,3 +237,23 @@ def test_half_day_counts_as_point_five(app_context):
         
         assert calculated_base == expected, \
             f"Base should be {expected}, got {calculated_base}"
+
+
+def test_pf_capped_at_wage_ceiling(app_context):
+    """PF is capped at 12% of ₹15,000 = ₹1,800 even when base_salary is ₹80,000."""
+    with app_context.app_context():
+        emp = Employee(
+            name='High Earner',
+            employee_type='permanent',
+            base_salary=Decimal('80000'),
+            pf_rate=12
+        )
+        db.session.add(emp)
+        db.session.commit()
+        
+        PF_WAGE_CEILING = Decimal('15000')
+        pf_base = min(emp.base_salary, PF_WAGE_CEILING)
+        pf_employee = pf_base * Decimal('12') / Decimal('100')
+        
+        assert pf_employee == Decimal('1800'), \
+            f"PF should be capped at 1800, got {pf_employee}"

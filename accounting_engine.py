@@ -468,6 +468,11 @@ def record_sale(date, customer_name, amount, gst_amount, payment_type='cash', de
             create_journal_entry(date, cogs_desc, cogs_acc.id, inventory_acc.id, cogs_amount)
 
             # Update inventory for weighted average cost
+            if item.closing_stock < quantity:
+                raise ValueError(
+                    f"Insufficient stock: only {item.closing_stock} tons "
+                    f"of {stone_type} {size} available, cannot sell {quantity}."
+                )
             item.closing_stock = (item.closing_stock or 0) - quantity
             item.sales = (item.sales or 0) + quantity
             if item.closing_stock > 0:
@@ -925,6 +930,7 @@ def get_monthly_revenue_expense(months=6):
         dict with labels (month names), revenue list, expense list
     """
     from datetime import date, timedelta
+    from dateutil.relativedelta import relativedelta
     from models import Transaction, Account
     from decimal import Decimal
     
@@ -940,20 +946,13 @@ def get_monthly_revenue_expense(months=6):
     expense_ids = [a.id for a in expense_accounts]
     
     for i in range(months - 1, -1, -1):
-        month_date = date(today.year, today.month - i, 1) if today.month - i > 0 else date(today.year - 1, 12 + today.month - i, 1)
-        
-        if today.month - i <= 0:
-            month_date = date(today.year - 1, 12 + today.month - i, 1)
-        
+        month_start = today.replace(day=1) - relativedelta(months=i)
         if i == 0:
-            end_month = date(today.year, today.month, 28) if today.month < 12 else date(today.year + 1, 1, 28)
+            month_end = today
         else:
-            next_month = date(today.year, today.month - i + 1, 1) if today.month - i + 1 > 0 else date(today.year - 1, 12, 1)
-            if today.month - i + 1 <= 0:
-                next_month = date(today.year - 1, 12 + today.month - i + 1, 1)
-            end_month = next_month - timedelta(days=1)
+            month_end = month_start + relativedelta(months=1) - timedelta(days=1)
         
-        month_name = month_date.strftime('%b')
+        month_name = month_start.strftime('%b')
         result['labels'].append(month_name)
         
         revenue = 0
@@ -962,16 +961,16 @@ def get_monthly_revenue_expense(months=6):
         if sales_acc:
             rev_trans = Transaction.query.filter(
                 Transaction.account_id == sales_acc.id,
-                Transaction.date >= month_date,
-                Transaction.date <= end_month,
+                Transaction.date >= month_start,
+                Transaction.date <= month_end,
                 Transaction.is_posted == True
             ).all()
             revenue = sum(t.credit or 0 for t in rev_trans)
         
         exp_trans = Transaction.query.filter(
             Transaction.account_id.in_(expense_ids),
-            Transaction.date >= month_date,
-            Transaction.date <= end_month,
+            Transaction.date >= month_start,
+            Transaction.date <= month_end,
             Transaction.is_posted == True
         ).all()
         expenses = sum(t.debit or 0 for t in exp_trans)

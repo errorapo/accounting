@@ -253,3 +253,64 @@ def test_gst_payment_reduces_liability(app_context):
     
     assert cgst_after == Decimal('0'), f"CGST should be 0, got {cgst_after}"
     assert sgst_after == Decimal('0'), f"SGST should be 0, got {sgst_after}"
+
+
+def test_oversell_raises_error(app_context):
+    """Selling more than available stock raises ValueError."""
+    with app_context.app_context():
+        from decimal import Decimal
+        from models import Inventory
+        Inventory.query.filter_by(stone_type='Granite', size='20mm').delete()
+        item = Inventory(
+            stone_type='Granite', size='20mm',
+            opening_stock=Decimal('10'), closing_stock=Decimal('10'),
+            rate_per_ton=Decimal('1000')
+        )
+        db.session.add(item)
+        db.session.commit()
+        
+        try:
+            record_sale(
+                date.today(), 'Customer', Decimal('5000'), Decimal('250'),
+                payment_type='cash', quantity=50,
+                stone_type='Granite', size='20mm'
+            )
+            assert False, "Expected ValueError was not raised"
+        except ValueError as e:
+            assert "Insufficient stock" in str(e)
+
+
+def test_monthly_revenue_no_crash_in_january(app_context):
+    """get_monthly_revenue_expense must not crash in any month."""
+    with app_context.app_context():
+        from accounting_engine import get_monthly_revenue_expense
+        from unittest.mock import patch
+        import datetime
+        with patch('accounting_engine.date') as mock_date:
+            mock_date.today.return_value = datetime.date(2026, 1, 15)
+            mock_date.side_effect = lambda *a, **kw: datetime.date(*a, **kw)
+            result = get_monthly_revenue_expense(months=6)
+        assert len(result['labels']) == 6
+        assert len(result['revenue']) == 6
+    """get_monthly_revenue_expense must not crash in any month."""
+    with app_context.app_context():
+        from accounting_engine import get_monthly_revenue_expense
+        from unittest.mock import patch
+        import datetime
+        with patch('accounting_engine.date') as mock_date:
+            mock_date.today.return_value = datetime.date(2026, 1, 15)
+            mock_date.side_effect = lambda *a, **kw: datetime.date(*a, **kw)
+            result = get_monthly_revenue_expense(months=6)
+        assert len(result['labels']) == 6
+        assert len(result['revenue']) == 6
+    """get_monthly_revenue_expense must not crash in any month."""
+    with app_context.app_context():
+        from accounting_engine import get_monthly_revenue_expense
+        from unittest.mock import patch
+        import datetime
+        with patch('accounting_engine.date') as mock_date:
+            mock_date.today.return_value = datetime.date(2026, 1, 15)
+            mock_date.side_effect = lambda *a, **kw: datetime.date(*a, **kw)
+            result = get_monthly_revenue_expense(months=6)
+        assert len(result['labels']) == 6
+        assert len(result['revenue']) == 6

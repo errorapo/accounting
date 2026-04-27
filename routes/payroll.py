@@ -95,7 +95,9 @@ def create_payroll():
         overtime_amount = Decimal(str(overtime_hours)) * Decimal(str(hourly)) * Decimal('1.5')
         gross_salary = base + overtime_amount + transport + food + housing + Decimal(str(bonus))
 
-        pf_employee = base * Decimal(str(pf_rate)) / Decimal('100')
+        PF_WAGE_CEILING = Decimal('15000')
+        pf_base = min(base, PF_WAGE_CEILING)
+        pf_employee = pf_base * Decimal(str(pf_rate)) / Decimal('100')
         pf_employer = pf_employee
         bonus_dec = Decimal(str(bonus))
         tax_dec = Decimal(str(tax_deduction))
