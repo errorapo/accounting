@@ -1,91 +1,119 @@
 {% extends "base.html" %}
-{% block title %}Create Purchase{% endblock %}
+{% block page_title %}Create Purchase{% endblock %}
+
 {% block content %}
 <div class="card">
-    <h2>Create New Purchase</h2>
+    <div class="card-header">
+        <div class="card-title">Create Purchase</div>
+    </div>
+    
     <form method="POST">
-        <div class="form-group">
-            <label>Vendor</label>
-            <select name="vendor_id" id="vendorSelect">
-                <option value="">Select Vendor</option>
-                {% for vendor in vendors %}
-                <option value="{{ vendor.id }}">{{ vendor.name }}</option>
-                {% endfor %}
-                <option value="">-- Or enter new vendor --</option>
-            </select>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Vendor</label>
+                <select name="vendor_id" id="vendorSelect" class="form-input">
+                    <option value="">Select Vendor</option>
+                    {% for vendor in vendors %}
+                    <option value="{{ vendor.id }}">{{ vendor.name }}</option>
+                    {% endfor %}
+                    <option value="">-- Or enter new vendor --</option>
+                </select>
+            </div>
+            
+            <div class="form-group" id="vendorNameGroup" style="display:none;">
+                <label class="form-label">Or Enter Vendor Name</label>
+                <input type="text" name="vendor_name" class="form-input">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Payment Type</label>
+                <select name="payment_type" class="form-input" required>
+                    <option value="cash">Cash (Paid Now)</option>
+                    <option value="credit">Credit (Pay Later)</option>
+                </select>
+            </div>
         </div>
-        <div class="form-group" id="vendorNameGroup" style="display:none;">
-            <label>Or Enter Vendor Name</label>
-            <input type="text" name="vendor_name">
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Supply Type</label>
+                <select name="supply_type" class="form-input" required>
+                    <option value="intra">Intra-state (CGST + SGST)</option>
+                    <option value="inter">Inter-state (IGST)</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">GST Rate %</label>
+                <input type="number" name="gst_rate" class="form-input" step="0.01" value="18" required>
+            </div>
         </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Stone Type</label>
+                <select name="stone_type" class="form-input" required>
+                    <option value="">Select Stone Type</option>
+                    <option value="Granite">Granite</option>
+                    <option value="Limestone">Limestone</option>
+                    <option value="Marble">Marble</option>
+                    <option value="Sandstone">Sandstone</option>
+                    <option value="Slate">Slate</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Size</label>
+                <select name="size" class="form-input" required>
+                    <option value="">Select Size</option>
+                    <option value="5mm">5mm</option>
+                    <option value="10mm">10mm</option>
+                    <option value="20mm">20mm</option>
+                    <option value="40mm">40mm</option>
+                    <option value="65mm">65mm</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Quantity (tons)</label>
+                <input type="number" name="quantity" class="form-input" step="0.01" placeholder="0.00" required>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Rate per Ton (₹)</label>
+                <input type="number" name="rate" class="form-input" step="0.01" placeholder="0.00" required>
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">ITC Eligible</label>
+                <select name="itc_eligible" class="form-input">
+                    <option value="1">Yes - ITC Claimable</option>
+                    <option value="0">No - ITC Not Claimable</option>
+                </select>
+            </div>
+        </div>
+        
         <script>
-            document.getElementById('vendorSelect').addEventListener('change', function() {
-                var nameGroup = document.getElementById('vendorNameGroup');
-                if (this.value === '') {
-                    nameGroup.style.display = 'block';
-                } else {
-                    nameGroup.style.display = 'none';
-                    document.querySelector('input[name="vendor_name"]').value = '';
-                }
-            });
+        document.getElementById('vendorSelect').addEventListener('change', function() {
+            var nameGroup = document.getElementById('vendorNameGroup');
+            if (this.value === '') {
+                nameGroup.style.display = 'block';
+            } else {
+                nameGroup.style.display = 'none';
+                document.querySelector('input[name="vendor_name"]').value = '';
+            }
+        });
         </script>
-        <div class="form-group">
-            <label>Payment Type</label>
-            <select name="payment_type" required>
-                <option value="cash">Cash (Paid Now)</option>
-                <option value="credit">Credit (Pay Later)</option>
-            </select>
+        
+        <div style="margin-top: 24px; display: flex; gap: 12px;">
+            <button type="submit" class="btn btn-primary">Create Purchase</button>
+            <a href="{{ url_for('purchases.purchases_list') }}" class="btn btn-secondary">Cancel</a>
         </div>
-        <div class="form-group">
-            <label>Supply Type</label>
-            <select name="supply_type" required>
-                <option value="intra">Intra-state (CGST + SGST)</option>
-                <option value="inter">Inter-state (IGST)</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label>Stone Type</label>
-            <select name="stone_type" required>
-                <option value="">Select Stone Type</option>
-                <option value="Granite">Granite</option>
-                <option value="Limestone">Limestone</option>
-                <option value="Marble">Marble</option>
-                <option value="Sandstone">Sandstone</option>
-                <option value="Slate">Slate</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label>Size</label>
-            <select name="size" required>
-                <option value="">Select Size</option>
-                <option value="5mm">5mm</option>
-                <option value="10mm">10mm</option>
-                <option value="20mm">20mm</option>
-                <option value="40mm">40mm</option>
-                <option value="65mm">65mm</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label>Quantity (tons)</label>
-            <input type="number" name="quantity" step="0.01" required>
-        </div>
-        <div class="form-group">
-            <label>Rate per Ton</label>
-            <input type="number" name="rate" step="0.01" required>
-        </div>
-        <div class="form-group">
-            <label>GST Rate %</label>
-            <input type="number" name="gst_rate" step="0.01" value="5">
-        </div>
-        <div class="form-group">
-            <label>ITC Eligible (Input Tax Credit)</label>
-            <select name="itc_eligible">
-                <option value="1">Yes - ITC Claimable</option>
-                <option value="0">No - ITC Not Claimable</option>
-            </select>
-        </div>
-        <button type="submit" class="btn btn-success">Create Purchase</button>
-        <a href="{{ url_for('purchases.purchases_list') }}" class="btn">Cancel</a>
     </form>
 </div>
 {% endblock %}

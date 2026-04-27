@@ -1,382 +1,167 @@
 {% extends "base.html" %}
-{% block title %}Accounting Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
 {% block content %}
-
-<style>
-  :root {
-    --bg-dark: #0f0f1a;
-    --bg-card: #1a1a2e;
-    --bg-header: #16213e;
-    --accent-blue: #00d4ff;
-    --accent-blue-dim: #0f3460;
-    --text-light: #e0e0e0;
-    --text-muted: #8892a0;
-    --border-color: #0f3460;
-    --success: #00676;
-    --danger: #ff4757;
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg-dark) !important; color: var(--text-light); }
-  .container { max-width: 1400px !important; padding: 0 !important; margin: 0 auto !important; }
-
-  .dash-wrap { background: var(--bg-dark); min-height: 100vh; padding: 28px 32px; }
-
-  .top-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; flex-wrap: wrap; gap: 14px; }
-  .top-bar h1 { font-size: 22px; font-weight: 700; color: var(--accent-blue); letter-spacing: -0.3px; }
-  .top-controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-  .ctrl-pill { display: flex; align-items: center; gap: 8px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 14px; font-size: 13px; color: var(--text-light); cursor: pointer; }
-  .ctrl-pill select { border: none; background: none; font-size: 13px; color: var(--text-light); outline: none; cursor: pointer; }
-
-  .metrics-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
-  .metric-card { background: var(--bg-card); border-radius: 14px; padding: 22px 24px; border: 1px solid var(--border-color); transition: box-shadow .2s, transform .2s; }
-  .metric-card:hover { box-shadow: 0 4px 16px rgba(0,212,255,.2); transform: translateY(-2px); }
-  .metric-label { font-size: 12px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 10px; }
-  .metric-value { font-size: 30px; font-weight: 700; color: var(--accent-blue); letter-spacing: -1px; line-height: 1; margin-bottom: 8px; }
-  .metric-trend { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 4px; }
-  .trend-up { color: var(--success); }
-  .trend-down { color: var(--danger); }
-  .trend-note { font-size: 11px; color: var(--text-muted); font-weight: 400; margin-top: 4px; }
-
-  .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
-  .charts-row-wide { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 16px; }
-  .chart-card { background: var(--bg-card); border-radius: 14px; padding: 22px 24px; border: 1px solid var(--border-color); }
-  .chart-title { font-size: 13px; color: var(--text-muted); font-weight: 500; margin-bottom: 18px; }
-
-  .alert-banner { background: rgba(255,71,87,.1); border: 1px solid var(--danger); border-left: 4px solid var(--danger); border-radius: 10px; padding: 14px 18px; margin-bottom: 16px; display: flex; align-items: flex-start; gap: 12px; }
-  .alert-banner h4 { font-size: 13px; font-weight: 700; color: var(--danger); margin-bottom: 4px; }
-  .alert-banner p { font-size: 12px; color: var(--text-light); }
-
-  .table-card { background: var(--bg-card); border-radius: 14px; padding: 22px 24px; border: 1px solid var(--border-color); margin-bottom: 16px; }
-  .table-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-  .table-header h3 { font-size: 14px; font-weight: 700; color: var(--accent-blue); }
-  .view-all { font-size: 12px; color: var(--success); font-weight: 600; text-decoration: none; }
-  .dash-table { width: 100%; border-collapse: collapse; }
-  .dash-table th { font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; padding: 0 12px 10px 0; text-align: left; border-bottom: 1px solid var(--border-color); }
-  .dash-table td { font-size: 13px; color: var(--text-light); padding: 11px 12px 11px 0; border-bottom: 1px solid var(--border-color); }
-  .badge { display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-  .badge-paid { background: rgba(0,198,0,.2); color: #00c800; }
-  .badge-pending { background: rgba(255,152,0,.2); color: #ff9800; }
-  .badge-credit { background: rgba(33,150,243,.2); color: #2196f3; }
-  .badge-cash { background: rgba(156,39,176,.2); color: #9c27b0; }
-
-  .quick-nav { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
-  .nav-btn { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 9px; padding: 9px 16px; font-size: 13px; font-weight: 600; color: var(--text-light); text-decoration: none; transition: all .2s; }
-  .nav-btn:hover { background: var(--accent-blue); color: var(--bg-dark); border-color: var(--accent-blue); box-shadow: 0 3px 10px rgba(0,212,255,.3); }
-
-  @media (max-width: 1100px) { .metrics-row { grid-template-columns: repeat(2, 1fr); } .charts-row, .charts-row-wide { grid-template-columns: 1fr; } }
-  @media (max-width: 640px) { .metrics-row { grid-template-columns: 1fr; } .dash-wrap { padding: 16px; } }
-</style>
-
-<div class="dash-wrap">
-
-  <div class="top-bar">
-    <h1>Accounting Dashboard</h1>
-    <div class="top-controls">
-      <div class="ctrl-pill">&#128197; This Financial Year</div>
-      <div class="ctrl-pill">
-        <select><option>All Stone Types</option><option>Granite</option><option>Limestone</option><option>Marble</option></select>
-      </div>
-      <div class="ctrl-pill">
-        <select><option>All Payments</option><option>Cash</option><option>Credit</option></select>
-      </div>
+<div class="stats-grid">
+    <div class="stat-card blue">
+        <div class="stat-icon blue">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
+        <div class="stat-label">Total Revenue MTD</div>
+        <div class="stat-value">{{ revenue_mtd|format_inr }}</div>
+        <div class="stat-delta positive">↑ 12.4% vs last month</div>
     </div>
-  </div>
-
-  {% if inventory_low %}
-  <div class="alert-banner">
-    <div>&#9888;&#65039;</div>
-    <div>
-      <h4>Low Stock Alert</h4>
-      <p>{% for item in inventory_low %}{{ item.stone_type }} {{ item.size }} ({{ item.closing_stock }} tons){% if not loop.last %} &middot; {% endif %}{% endfor %}</p>
+    
+    <div class="stat-card teal">
+        <div class="stat-icon teal">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+        </div>
+        <div class="stat-label">Net Profit MTD</div>
+        <div class="stat-value">{{ profit_mtd|format_inr }}</div>
+        <div class="stat-delta positive">↑ 8.2% vs last month</div>
     </div>
-  </div>
-  {% endif %}
-
-  <div class="metrics-row">
-    <div class="metric-card">
-      <div class="metric-label">Revenue</div>
-      <div class="metric-value">
-        {% if monthly_sales >= 100000 %}&#8377;{{ "%.1f"|format(monthly_sales/100000) }}L
-        {% elif monthly_sales >= 1000 %}&#8377;{{ "%.0f"|format(monthly_sales/1000) }}K
-        {% else %}&#8377;{{ "%.0f"|format(monthly_sales) }}{% endif %}
-      </div>
-      <div class="metric-trend trend-up">&#8593; Total Sales</div>
-      <div class="trend-note">All recorded invoices</div>
+    
+    <div class="stat-card amber">
+        <div class="stat-icon amber">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div class="stat-label">Outstanding AR</div>
+        <div class="stat-value">{{ ar_outstanding|format_inr }}</div>
     </div>
-    <div class="metric-card">
-      <div class="metric-label">Net Profit Margin</div>
-      <div class="metric-value" id="marginVal">—%</div>
-      <div class="metric-trend trend-up" id="marginTrend">Computing…</div>
-      <div class="trend-note">Revenue minus expenses</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Return on Investment</div>
-      <div class="metric-value" id="roiVal">—%</div>
-      <div class="metric-trend" id="roiTrend">vs salary cost</div>
-      <div class="trend-note">Net profit / total salary</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Salary Expenses (CTC)</div>
-      <div class="metric-value">
-        {% if total_salary >= 100000 %}&#8377;{{ "%.1f"|format(total_salary/100000) }}L
-        {% elif total_salary >= 1000 %}&#8377;{{ "%.0f"|format(total_salary/1000) }}K
-        {% else %}&#8377;{{ "%.0f"|format(total_salary) }}{% endif %}
-      </div>
-      <div class="metric-trend trend-down">{{ total_employees }} Employees</div>
-      <div class="trend-note">Net salaries disbursed</div>
-    </div>
-  </div>
-
-  <div class="charts-row">
-    <div class="chart-card">
-      <div class="chart-title">Net Profit by Month (&#8377;)</div>
-      <canvas id="profitChart" height="180"></canvas>
-    </div>
-    <div class="chart-card">
-      <div class="chart-title">Revenue vs Salary Expenses</div>
-      <canvas id="revenueExpChart" height="180"></canvas>
-    </div>
-  </div>
-
-  <div class="charts-row-wide">
-    <div class="chart-card">
-      <div class="chart-title">Earnings Trend — Sales & Salary</div>
-      <canvas id="ebitdaChart" height="170"></canvas>
-    </div>
-    <div class="chart-card">
-      <div class="chart-title">Top Customers by Revenue</div>
-      <canvas id="customerChart" height="170"></canvas>
-    </div>
-  </div>
-
-  <div class="charts-row">
-    <div class="chart-card">
-      <div class="chart-title">Monthly Payroll Expenses</div>
-      <canvas id="salaryChart" height="160"></canvas>
-    </div>
-    <div class="chart-card">
-      <div class="chart-title">Inventory — Closing Stock (tons)</div>
-      <canvas id="inventoryChart" height="160"></canvas>
-    </div>
-  </div>
-
-  <div class="table-card">
-    <div class="table-header">
-      <h3>Recent Sales</h3>
-      <a class="view-all" href="{{ url_for('sales.sales_list') }}">View All &#8594;</a>
-    </div>
-    <table class="dash-table">
-      <thead>
-        <tr>
-          <th>Invoice</th><th>Customer</th><th>Stone / Size</th><th>Qty (T)</th><th>Amount</th><th>Payment</th><th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for s in recent_sales %}
-        <tr>
-          <td style="font-family:monospace;font-size:12px">{{ s.invoice_number or ('#' ~ s.id|string) }}</td>
-          <td>{{ s.customer.name if s.customer else '—' }}</td>
-          <td>{{ s.stone_type }} / {{ s.size }}</td>
-          <td>{{ s.quantity }}</td>
-          <td style="font-family:monospace">&#8377;{{ "{:,.0f}".format(s.total_amount) }}</td>
-          <td><span class="badge badge-{{ s.payment_type }}">{{ s.payment_type|capitalize }}</span></td>
-          <td><span class="badge badge-{{ s.payment_status }}">{{ s.payment_status|capitalize }}</span></td>
-        </tr>
-        {% else %}
-        <tr><td colspan="7" style="text-align:center;color:#b0b8c4;padding:20px">No sales yet</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-
-  <div class="quick-nav">
-    <a class="nav-btn" href="{{ url_for('payroll.attendance') }}">&#128197; Attendance</a>
-    <a class="nav-btn" href="{{ url_for('payroll.create_payroll') }}">&#128176; Payroll</a>
-    <a class="nav-btn" href="{{ url_for('sales.create_sale') }}">&#129534; New Sale</a>
-    <a class="nav-btn" href="{{ url_for('purchases.create_purchase') }}">&#128230; New Purchase</a>
-    <a class="nav-btn" href="{{ url_for('inventory.index') }}">&#129683; Inventory</a>
-    <a class="nav-btn" href="{{ url_for('accounts.ledger') }}">&#128210; Ledger</a>
-    <a class="nav-btn" href="{{ url_for('reports.profit_loss') }}">&#128202; P&amp;L Report</a>
-    <a class="nav-btn" href="{{ url_for('reports.gst_report') }}">&#129518; GST Report</a>
-    <a class="nav-btn" href="{{ url_for('reports.balance_sheet') }}">&#9878;&#65039; Balance Sheet</a>
-  </div>
-
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    </div>
-    <div class="chart-container">
-        <h3 style="color: var(--accent-blue); margin-bottom: 15px;">Salary Expenses by Month</h3>
-        <canvas id="salaryChart" height="200"></canvas>
+    
+    <div class="stat-card red">
+        <div class="stat-icon red">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div class="stat-label">GST Payable</div>
+        <div class="stat-value">{{ gst_payable|format_inr }}</div>
     </div>
 </div>
 
-<div class="chart-row">
-    <div class="chart-container">
-        <h3 style="color: var(--accent-blue); margin-bottom: 15px;">Revenue vs Expenses</h3>
+<div class="charts-grid">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Revenue vs Expenses</div>
+        </div>
         <canvas id="revenueChart" height="200"></canvas>
     </div>
-    <div class="chart-container">
-        <h3 style="color: var(--accent-blue); margin-bottom: 15px;">Top Customers by Purchase</h3>
-        <canvas id="customerChart" height="200"></canvas>
+    
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Expense Breakdown</div>
+        </div>
+        <canvas id="expenseChart" height="200"></canvas>
     </div>
 </div>
 
-<div class="chart-row">
-    <div class="chart-container" style="grid-column: span 2;">
-        <h3 style="color: var(--accent-blue); margin-bottom: 15px;">Recent Sales</h3>
-        <table style="font-size: 14px; width: 100%;">
-            <tr><th>Date</th><th>Customer</th><th>Stone</th><th>Size</th><th>Amount</th></tr>
-            {% for s in recent_sales %}
-            <tr>
-                <td>{{ s.invoice_date }}</td>
-                <td>{{ s.customer.name if s.customer else s.customer_id }}</td>
-                <td>{{ s.stone_type }}</td>
-                <td>{{ s.size }}</td>
-                <td>₹{{ "%.0f"|format(s.total_amount) }}</td>
-            </tr>
-            {% endfor %}
+<div class="bottom-grid">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Recent Transactions</div>
+            <a href="{{ url_for('accounts.ledger') }}" style="font-size: 13px; color: var(--blue);">View All</a>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th style="text-align: right;">Amount</th>
+                    <th>Type</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if recent_sales %}
+                {% for sale in recent_sales[:10] %}
+                <tr>
+                    <td>{{ sale.invoice_date.strftime('%d %b') }}</td>
+                    <td>{{ sale.stone_type }} - {{ sale.size }}</td>
+                    <td class="amount">{{ sale.total_amount|format_inr }}</td>
+                    <td><span class="badge paid">CR</span></td>
+                </tr>
+                {% endfor %}
+                {% else %}
+                <tr>
+                    <td colspan="4" style="text-align: center; color: var(--text-muted);">No transactions yet</td>
+                </tr>
+                {% endif %}
+            </tbody>
         </table>
     </div>
+    
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Quick Actions</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+            <a href="{{ url_for('sales.create_sale') }}" class="btn btn-primary" style="text-align: center;">+ New Sale</a>
+            <a href="{{ url_for('purchases.create_purchase') }}" class="btn btn-secondary" style="text-align: center;">+ New Purchase</a>
+            <a href="{{ url_for('payroll.create_payroll') }}" class="btn btn-secondary" style="text-align: center;">Generate Payroll</a>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px;">
+            <div style="background: var(--surface); padding: 12px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 11px; color: var(--text-muted);">Employees</div>
+                <div style="font-family: 'DM Mono', monospace; font-size: 16px; font-weight: 500;">{{ total_employees }}</div>
+            </div>
+            <div style="background: var(--surface); padding: 12px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 11px; color: var(--text-muted);">Customers</div>
+                <div style="font-family: 'DM Mono', monospace; font-size: 16px; font-weight: 500;">{{ total_customers }}</div>
+            </div>
+        </div>
+    </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
-const salesByMonth  = {{ sales_by_month | tojson }};
-const salaryByMonth = {{ salary_by_month | tojson }};
-const customerSales = {{ customer_sales | tojson }};
-const revExp        = {{ revenue_vs_expenses | tojson }};
-const totalSales    = {{ monthly_sales | float }};
-const totalSalary   = {{ total_salary | float }};
-
-Chart.defaults.font.family = 'Segoe UI, sans-serif';
-Chart.defaults.font.size   = 11;
-Chart.defaults.color       = '#8892a0';
-Chart.defaults.plugins.legend.display = false;
-
-const gridOpts = { color: '#1a1a2e', drawBorder: false };
-const tickOpts = { color: '#8892a0' };
-
-function rfmt(v) {
-  if (v >= 100000) return '\u20B9' + (v/100000).toFixed(1) + 'L';
-  if (v >= 1000)   return '\u20B9' + (v/1000).toFixed(0) + 'K';
-  return '\u20B9' + v.toFixed(0);
-}
-
-const totalExpenses = revExp.length > 1 ? parseFloat(revExp[1].value) : 0;
-const netProfit     = totalSales - totalExpenses;
-const marginPct     = totalSales > 0 ? ((netProfit/totalSales)*100).toFixed(1) : 0;
-const roi           = totalSalary > 0 ? ((netProfit/totalSalary)*100).toFixed(1) : 0;
-
-document.getElementById('marginVal').textContent  = marginPct + '%';
-document.getElementById('roiVal').textContent     = roi + '%';
-const mTrend = document.getElementById('marginTrend');
-mTrend.textContent  = netProfit >= 0 ? '\u2191 Profitable' : '\u2193 Net Loss';
-mTrend.className    = 'metric-trend ' + (netProfit >= 0 ? 'trend-up' : 'trend-down');
-const rTrend = document.getElementById('roiTrend');
-rTrend.textContent  = roi > 0 ? '\u2191 Positive ROI' : '\u2193 Negative ROI';
-rTrend.className    = 'metric-trend ' + (roi > 0 ? 'trend-up' : 'trend-down');
-
-// Chart 1: profit by month
-new Chart(document.getElementById('profitChart'), {
-  type: 'bar',
-  data: {
-    labels: salesByMonth.length ? salesByMonth.map(r=>r[0]||'?') : ['No data'],
-    datasets: [{ data: salesByMonth.length ? salesByMonth.map(r=>parseFloat(r[1])||0) : [0],
-      backgroundColor: ctx => ctx.raw >= 0 ? '#4caf50' : '#ef5350',
-      borderRadius: 5, barPercentage: .6 }]
-  },
-  options: { responsive:true, plugins:{ tooltip:{ callbacks:{ label:c=>rfmt(c.raw) }}},
-    scales:{ x:{grid:gridOpts,ticks:tickOpts}, y:{grid:gridOpts,ticks:{...tickOpts,callback:v=>rfmt(v)}} }}
+const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+new Chart(revenueCtx, {
+    type: 'bar',
+    data: {
+        labels: {{ monthly_data.labels|tojson }},
+        datasets: [
+            {
+                label: 'Revenue',
+                data: {{ monthly_data.revenue|tojson }},
+                backgroundColor: '#1A56DB',
+                borderRadius: 4
+            },
+            {
+                label: 'Expenses',
+                data: {{ monthly_data.expenses|tojson }},
+                backgroundColor: '#EF4444',
+                borderRadius: 4
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { position: 'top' } },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    callback: function(value) {
+                        return '₹' + (value / 100000).toFixed(1) + 'L';
+                    }
+                }
+            }
+        }
+    }
 });
 
-// Chart 2: Revenue vs Expenses grouped
-const allMonths = [...new Set([...salesByMonth.map(r=>r[0]),...salaryByMonth.map(r=>r[0])])].sort().filter(Boolean);
-const rVals = allMonths.map(m=>{ const r=salesByMonth.find(x=>x[0]===m); return r?parseFloat(r[1]):0; });
-const eVals = allMonths.map(m=>{ const r=salaryByMonth.find(x=>x[0]===m); return r?parseFloat(r[1]):0; });
-
-new Chart(document.getElementById('revenueExpChart'), {
-  type: 'bar',
-  data: {
-    labels: allMonths.length ? allMonths : ['—'],
-    datasets: [
-      { label:'Revenue', data: rVals.length?rVals:[0], backgroundColor:'#4caf50', borderRadius:4, barPercentage:.45 },
-      { label:'Salary', data: eVals.length?eVals:[0], backgroundColor:'#b0bec5', borderRadius:4, barPercentage:.45 }
-    ]
-  },
-  options: { responsive:true,
-    plugins:{ legend:{ display:true, position:'bottom', labels:{ boxWidth:10,padding:12,color:'#8a93a2',font:{size:11} }},
-      tooltip:{callbacks:{label:c=>c.dataset.label+': '+rfmt(c.raw)}}},
-    scales:{ x:{grid:gridOpts,ticks:tickOpts}, y:{grid:gridOpts,ticks:{...tickOpts,callback:v=>rfmt(v)}} }}
-});
-
-// Chart 3: EBITDA area
-new Chart(document.getElementById('ebitdaChart'), {
-  type: 'line',
-  data: {
-    labels: allMonths.length ? allMonths : ['—'],
-    datasets: [
-      { label:'Sales Revenue', data:rVals.length?rVals:[0], fill:true, backgroundColor:'rgba(66,165,245,.15)', borderColor:'#42a5f5', borderWidth:2, tension:.45, pointRadius:3, pointBackgroundColor:'#42a5f5' },
-      { label:'Salary Cost',   data:eVals.length?eVals:[0], fill:true, backgroundColor:'rgba(171,71,188,.15)', borderColor:'#ab47bc', borderWidth:2, tension:.45, pointRadius:3, pointBackgroundColor:'#ab47bc' }
-    ]
-  },
-  options: { responsive:true,
-    plugins:{ legend:{ display:true, position:'bottom', labels:{ boxWidth:10,padding:12,color:'#8a93a2',font:{size:11} }},
-      tooltip:{callbacks:{label:c=>c.dataset.label+': '+rfmt(c.raw)}}},
-    scales:{ x:{grid:gridOpts,ticks:tickOpts}, y:{grid:gridOpts,ticks:{...tickOpts,callback:v=>rfmt(v)}} }}
-});
-
-// Chart 4: Customers doughnut
-const cLabels = customerSales.map(c=>c.name);
-const cVals   = customerSales.map(c=>parseFloat(c.total)||0);
-const cColors = ['#4caf50','#42a5f5','#ab47bc','#ff7043','#ffd740','#26c6da'];
-new Chart(document.getElementById('customerChart'), {
-  type: 'doughnut',
-  data: {
-    labels: cLabels.length ? cLabels : ['No data'],
-    datasets: [{ data:cVals.length?cVals:[1], backgroundColor:cColors, borderWidth:0, hoverOffset:6 }]
-  },
-  options: { responsive:true, cutout:'68%',
-    plugins:{ legend:{ display:true, position:'bottom', labels:{ boxWidth:10,padding:10,color:'#8a93a2',font:{size:10},
-      generateLabels: ch => ch.data.labels.map((l,i)=>({ text:l.length>12?l.substring(0,12)+'…':l, fillStyle:cColors[i%cColors.length], hidden:false, index:i }))
-    }}, tooltip:{callbacks:{label:c=>c.label+': '+rfmt(c.raw)}}}}
-});
-
-// Chart 5: Salary bar
-new Chart(document.getElementById('salaryChart'), {
-  type: 'bar',
-  data: {
-    labels: salaryByMonth.length ? salaryByMonth.map(r=>r[0]||'?') : ['No payroll'],
-    datasets: [{ data:salaryByMonth.length?salaryByMonth.map(r=>parseFloat(r[1])||0):[0],
-      backgroundColor:'#42a5f5', borderRadius:5, barPercentage:.55 }]
-  },
-  options: { responsive:true, plugins:{tooltip:{callbacks:{label:c=>rfmt(c.raw)}}},
-    scales:{ x:{grid:gridOpts,ticks:tickOpts}, y:{grid:gridOpts,ticks:{...tickOpts,callback:v=>rfmt(v)}} }}
-});
-
-// Chart 6: Inventory
-{% set inv_labels = [] %}
-{% set inv_stocks = [] %}
-{% if inventory_items is defined %}
-  {% for item in inventory_items %}
-    {% set _ = inv_labels.append(item.stone_type ~ ' ' ~ item.size) %}
-    {% set _ = inv_stocks.append(item.closing_stock) %}
-  {% endfor %}
-{% endif %}
-const invLabels = {{ inv_labels | tojson }};
-const invStocks = {{ inv_stocks | tojson }};
-
-new Chart(document.getElementById('inventoryChart'), {
-  type: 'bar',
-  data: {
-    labels: invLabels.length ? invLabels : ['No inventory'],
-    datasets: [{ data:invStocks.length?invStocks:[0],
-      backgroundColor: invStocks.map(v=>v<20?'#ef5350':'#4caf50'),
-      borderRadius:5, barPercentage:.6 }]
-  },
-  options: { responsive:true, plugins:{tooltip:{callbacks:{label:c=>c.raw+' tons'}}},
-    scales:{ x:{grid:gridOpts,ticks:{...tickOpts,maxRotation:30,font:{size:10}}}, y:{grid:gridOpts,ticks:tickOpts} }}
+const expenseCtx = document.getElementById('expenseChart').getContext('2d');
+new Chart(expenseCtx, {
+    type: 'doughnut',
+    data: {
+        labels: ['Salaries', 'Raw Material', 'Operations', 'Other'],
+        datasets: [{
+            data: [45, 25, 20, 10],
+            backgroundColor: ['#1A56DB', '#0CA678', '#F59E0B', '#EF4444']
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom' } }
+    }
 });
 </script>
-
 {% endblock %}

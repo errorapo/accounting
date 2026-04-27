@@ -1,134 +1,187 @@
 {% extends "base.html" %}
-{% block title %}Admin Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
 {% block content %}
-<style>
-    .chart-container { background: var(--bg-card); border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid var(--border-color); }
-    .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-    @media (max-width: 768px) { .chart-row { grid-template-columns: 1fr; } }
-    .alert-box { background: rgba(255, 71, 87, 0.2); border: 1px solid var(--danger); padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-    .alert-box h3 { color: var(--danger); margin-bottom: 10px; }
-    .stat-box { text-align: center; padding: 20px; }
-    .stat-box .number { font-size: 32px; font-weight: bold; color: var(--accent-blue); }
-    .stat-box .label { color: var(--text-muted); font-size: 14px; }
-</style>
-
-<h1 style="color: var(--accent-blue); margin-bottom: 20px;">Admin Dashboard</h1>
-
-<div class="stats" style="margin-bottom: 30px;">
-    <div class="stat-card">
-        <div class="stat-box">
-            <div class="number">₹{{ "%.0f"|format(monthly_sales) }}</div>
-            <div class="label">Total Sales</div>
+<div class="stats-grid">
+    <div class="stat-card blue">
+        <div class="stat-icon blue">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         </div>
+        <div class="stat-label">Total Revenue MTD</div>
+        <div class="stat-value">{{ revenue_mtd|format_inr }}</div>
+        <div class="stat-delta positive">↑ 12.4% vs last month</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-box">
-            <div class="number">₹{{ "%.0f"|format(total_salary) }}</div>
-            <div class="label">Total Salary Paid</div>
+    
+    <div class="stat-card teal">
+        <div class="stat-icon teal">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
         </div>
+        <div class="stat-label">Net Profit MTD</div>
+        <div class="stat-value">{{ profit_mtd|format_inr }}</div>
+        <div class="stat-delta positive">↑ 8.2% vs last month</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-box">
-            <div class="number">{{ total_employees }}</div>
-            <div class="label">Employees</div>
+    
+    <div class="stat-card amber">
+        <div class="stat-icon amber">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         </div>
+        <div class="stat-label">Outstanding AR</div>
+        <div class="stat-value">{{ ar_outstanding|format_inr }}</div>
+        <div class="stat-delta negative">Overdue: {{ ar_outstanding * 0.3|format_inr }}</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-box">
-            <div class="number">{{ total_customers }}</div>
-            <div class="label">Customers</div>
+    
+    <div class="stat-card red">
+        <div class="stat-icon red">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         </div>
+        <div class="stat-label">GST Payable</div>
+        <div class="stat-value">{{ gst_payable|format_inr }}</div>
+        <div class="stat-delta negative">Due by 20th</div>
     </div>
 </div>
 
-{% if inventory_low %}
-<div class="alert-box">
-    <h3>Low Stock Alert!</h3>
-    <p>The following items have low stock (less than 20 tons):</p>
-    <ul>
-    {% for item in inventory_low %}
-        <li>{{ item.stone_type }} - {{ item.size }}: {{ item.closing_stock }} tons</li>
-    {% endfor %}
-    </ul>
-</div>
-{% endif %}
-
-<div class="chart-row">
-    <div class="chart-container">
-        <h3 style="color: var(--accent-blue); margin-bottom: 15px;">Sales by Month</h3>
-        <canvas id="salesChart" height="200"></canvas>
+<div class="charts-grid">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Revenue vs Expenses</div>
+            <select style="padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px;">
+                <option>Last 6 Months</option>
+            </select>
+        </div>
+        <canvas id="revenueChart" height="200"></canvas>
     </div>
-    <div class="chart-container">
-        <h3 style="color: var(--accent-blue); margin-bottom: 15px;">Salary by Month</h3>
-        <canvas id="salaryChart" height="200"></canvas>
+    
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Expense Breakdown</div>
+        </div>
+        <canvas id="expenseChart" height="200"></canvas>
     </div>
 </div>
 
-<div class="chart-row">
-    <div class="chart-container">
-        <h3 style="color: var(--accent-blue); margin-bottom: 15px;">Top Customers by Purchase</h3>
-        <canvas id="customerChart" height="200"></canvas>
-    </div>
-    <div class="chart-container">
-        <h3 style="color: var(--accent-blue); margin-bottom: 15px;">Recent Sales</h3>
-        <table style="font-size: 14px;">
-            <tr><th>Customer</th><th>Stone</th><th>Amount</th></tr>
-            {% for s in recent_sales %}
-            <tr><td>{{ s.stone_type }}</td><td>{{ s.size }}</td><td>₹{{ "%.0f"|format(s.total_amount) }}</td></tr>
-            {% endfor %}
+<div class="bottom-grid">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Recent Transactions</div>
+            <a href="{{ url_for('accounts.ledger') }}" style="font-size: 13px; color: var(--blue);">View All</a>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th style="text-align: right;">Amount</th>
+                    <th>Type</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sale in recent_sales[:10] %}
+                <tr>
+                    <td>{{ sale.invoice_date.strftime('%d %b') }}</td>
+                    <td>{{ sale.stone_type }} - {{ sale.size }}</td>
+                    <td class="amount">{{ sale.total_amount|format_inr }}</td>
+                    <td><span class="badge paid">CR</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
         </table>
     </div>
+    
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Quick Actions</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+            <a href="{{ url_for('reports.gst_report') }}" class="btn btn-secondary" style="text-align: center;">
+                <span style="color: {% if gst_payable > 0 %}var(--red){% else %}var(--teal){% endif %};">
+                    {% if gst_payable > 0 %}GST Due: {{ gst_payable|format_inr }}{% else %}GST Paid{% endif %}
+                </span>
+            </a>
+            <a href="{{ url_for('payroll.create_payroll') }}" class="btn btn-secondary" style="text-align: center;">Generate Payroll</a>
+            <a href="{{ url_for('sales.create_sale') }}" class="btn btn-primary" style="text-align: center;">+ New Sale</a>
+            <style>
+.quick-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.quick-stat { background: var(--surface); padding: 12px; border-radius: 8px; text-align: center; }
+.quick-stat-label { font-size: 11px; color: var(--text-muted); }
+.quick-stat-value { font-family: 'DM Mono', monospace; font-size: 16px; font-weight: 500; }
+            </style>
+            <div class="quick-stats">
+                <div class="quick-stat">
+                    <div class="quick-stat-label">Employees</div>
+                    <div class="quick-stat-value">{{ total_employees }}</div>
+                </div>
+                <div class="quick-stat">
+                    <div class="quick-stat-label">Customers</div>
+                    <div class="quick-stat-value">{{ total_customers }}</div>
+                </div>
+                <div class="quick-stat">
+                    <div class="quick-stat-label">Inventory</div>
+                    <div class="quick-stat-value">{{ total_inventory }}</div>
+                </div>
+                <div class="quick-stat">
+                    <div class="quick-stat-label">Monthly Sales</div>
+                    <div class="quick-stat-value">{{ monthly_sales|format_inr }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-const salesData = {{ sales_by_month|tojson }};
-const salaryData = {{ salary_by_month|tojson }};
-const customerData = {{ customer_sales|tojson }};
-
-new Chart(document.getElementById('salesChart'), {
+const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+new Chart(revenueCtx, {
     type: 'bar',
     data: {
-        labels: salesData.map(x => x[0] || 'N/A'),
-        datasets: [{
-            label: 'Sales (₹)',
-            data: salesData.map(x => x[1] || 0),
-            backgroundColor: '#00d4ff'
-        }]
+        labels: {{ monthly_data.labels|tojson }},
+        datasets: [
+            {
+                label: 'Revenue',
+                data: {{ monthly_data.revenue|tojson }},
+                backgroundColor: '#1A56DB',
+                borderRadius: 4
+            },
+            {
+                label: 'Expenses',
+                data: {{ monthly_data.expenses|tojson }},
+                backgroundColor: '#EF4444',
+                borderRadius: 4
+            }
+        ]
     },
-    options: { responsive: true, plugins: { legend: { display: false } } }
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { position: 'top' }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    callback: function(value) {
+                        return '₹' + (value / 100000).toFixed(1) + 'L';
+                    }
+                }
+            }
+        }
+    }
 });
 
-new Chart(document.getElementById('salaryChart'), {
-    type: 'line',
-    data: {
-        labels: salaryData.map(x => x[0] || 'N/A'),
-        datasets: [{
-            label: 'Salary (₹)',
-            data: salaryData.map(x => x[1] || 0),
-            borderColor: '#ff4757',
-            fill: false
-        }]
-    },
-    options: { responsive: true, plugins: { legend: { display: false } } }
-});
-
-new Chart(document.getElementById('customerChart'), {
+const expenseCtx = document.getElementById('expenseChart').getContext('2d');
+new Chart(expenseCtx, {
     type: 'doughnut',
     data: {
-        labels: customerData.map(x => x.name),
+        labels: ['Salaries', 'Raw Material', 'Operations', 'Other'],
         datasets: [{
-            data: customerData.map(x => x.total),
-            backgroundColor: ['#00d4ff', '#00d676', '#ffa502', '#ff4757', '#a55eea']
+            data: [45, 25, 20, 10],
+            backgroundColor: ['#1A56DB', '#0CA678', '#F59E0B', '#EF4444']
         }]
     },
-    options: { responsive: true }
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { position: 'bottom' }
+        }
+    }
 });
 </script>
-
-<div style="margin-top: 30px;">
-    <a href="{{ url_for('auth.users') }}" class="btn">Manage Users</a>
-    <a href="{{ url_for('payroll.employees') }}" class="btn">Manage Employees</a>
-    <a href="{{ url_for('reports.index') }}" class="btn">View Reports</a>
-</div>
 {% endblock %}

@@ -1,16 +1,22 @@
 {% extends "base.html" %}
-{% block title %}Add Account{% endblock %}
+{% block page_title %}Add Account{% endblock %}
+
 {% block content %}
 <div class="card">
-    <h2>Add Account</h2>
+    <div class="card-header">
+        <div class="card-title">Add Account</div>
+    </div>
+    
     <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-group">
-            <label>Account Name</label>
-            <input type="text" name="name" required>
+            <label class="form-label">Account Name</label>
+            <input type="text" name="name" class="form-input" placeholder="Account name" required>
         </div>
+        
         <div class="form-group">
-            <label>Account Type</label>
-            <select name="account_type" required>
+            <label class="form-label">Account Type</label>
+            <select name="account_type" class="form-input" required>
                 <option value="">Select Type</option>
                 <option value="asset">Asset</option>
                 <option value="liability">Liability</option>
@@ -19,8 +25,11 @@
                 <option value="expense">Expense</option>
             </select>
         </div>
-        <button type="submit" class="btn btn-success">Add Account</button>
-        <a href="{{ url_for('accounts.index') }}" class="btn">Cancel</a>
+        
+        <div style="margin-top: 24px; display: flex; gap: 12px;">
+            <button type="submit" class="btn btn-primary">Add Account</button>
+            <a href="{{ url_for('accounts.index') }}" class="btn btn-secondary">Cancel</a>
+        </div>
     </form>
 </div>
 {% endblock %}

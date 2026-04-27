@@ -4,7 +4,7 @@ from routes.auth_utils import admin_required
 from ext import db
 from models import Account, Transaction, JournalEntry
 from datetime import datetime, date
-from accounting_engine import create_journal_entry, reverse_journal_entry, get_or_create_account
+from accounting_engine import create_journal_entry, reverse_journal_entry, get_or_create_account, get_account_balance
 from models import Transaction
 
 bp = Blueprint('accounts', __name__)
@@ -14,7 +14,10 @@ bp = Blueprint('accounts', __name__)
 def index():
     accounts = Account.query.all()
     account_types = ['asset', 'liability', 'capital', 'income', 'expense']
-    return render_template('accounts.html', accounts=accounts, account_types=account_types)
+    balances = {}
+    for account in accounts:
+        balances[account.id] = get_account_balance(account.id)
+    return render_template('accounts.html', accounts=accounts, account_types=account_types, balances=balances)
 
 @bp.route('/accounts/add', methods=['GET', 'POST'])
 @login_required

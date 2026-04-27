@@ -1,7 +1,10 @@
 from flask import Blueprint, render_template, session, redirect, url_for, jsonify
-from datetime import datetime
+from datetime import datetime, date
+from decimal import Decimal
+from sqlalchemy import func
 
 from routes.auth_utils import login_required
+from accounting_engine import get_income_statement, get_account_balance, get_monthly_revenue_expense
 
 bp = Blueprint('dashboard', __name__)
 
@@ -38,10 +41,10 @@ def admin_dashboard():
     if session.get('role') != 'admin':
         return redirect(url_for('dashboard.index'))
     
-    from models import Employee, Inventory, Sales, Payroll, Customer
+    from models import Employee, Inventory, Sales, Payroll, Customer, Account
     from ext import db
     from sqlalchemy import func
-    from datetime import datetime
+    from datetime import datetime, date
     
     total_employees = Employee.query.filter_by(is_active=True).count()
     total_customers = Customer.query.count()
@@ -76,6 +79,30 @@ def admin_dashboard():
     ).group_by(Payroll.month).all()
     salary_by_month = [[row[0], float(row[1] or 0)] for row in salary_by_month_raw] if salary_by_month_raw else []
     
+    today = date.today()
+    start_of_month = date(today.year, today.month, 1)
+    
+    income_stmt = get_income_statement(start_of_month, today)
+    revenue_mtd = income_stmt.get('total_income', 0)
+    expenses_mtd = income_stmt.get('total_expenses', 0)
+    profit_mtd = income_stmt.get('net_profit', 0)
+    
+    ar_acc = Account.query.filter_by(name='Accounts Receivable').first()
+    ar_outstanding = get_account_balance(ar_acc.id) if ar_acc else 0
+    
+    cgst_acc = Account.query.filter_by(name='CGST Payable').first()
+    sgst_acc = Account.query.filter_by(name='SGST Payable').first()
+    igst_acc = Account.query.filter_by(name='IGST Payable').first()
+    gst_payable = 0
+    if cgst_acc:
+        gst_payable += get_account_balance(cgst_acc.id)
+    if sgst_acc:
+        gst_payable += get_account_balance(sgst_acc.id)
+    if igst_acc:
+        gst_payable += get_account_balance(igst_acc.id)
+    
+    monthly_data = get_monthly_revenue_expense(months=6)
+    
     return render_template('admin_dashboard.html',
                          total_employees=total_employees,
                          total_customers=total_customers,
@@ -87,7 +114,12 @@ def admin_dashboard():
                          customer_sales=customer_sales,
                          inventory_low=inventory_low,
                          sales_by_month=sales_by_month,
-                         salary_by_month=salary_by_month)
+                         salary_by_month=salary_by_month,
+                         revenue_mtd=revenue_mtd,
+                         profit_mtd=profit_mtd,
+                         ar_outstanding=ar_outstanding,
+                         gst_payable=gst_payable,
+                         monthly_data=monthly_data)
 
 @bp.route('/accountant')
 @login_required
@@ -98,6 +130,7 @@ def accountant_dashboard():
     from models import Employee, Inventory, Sales, Payroll, Customer, Transaction, Account
     from ext import db
     from sqlalchemy import func
+    from datetime import date
 
     total_employees = Employee.query.filter_by(is_active=True).count()
     total_customers = Customer.query.count()
@@ -144,6 +177,29 @@ def accountant_dashboard():
     ]
 
     inventory_items = Inventory.query.all()
+    
+    today = date.today()
+    start_of_month = date(today.year, today.month, 1)
+    
+    income_stmt = get_income_statement(start_of_month, today)
+    revenue_mtd = income_stmt.get('total_income', 0)
+    profit_mtd = income_stmt.get('net_profit', 0)
+    
+    ar_acc = Account.query.filter_by(name='Accounts Receivable').first()
+    ar_outstanding = get_account_balance(ar_acc.id) if ar_acc else 0
+    
+    cgst_acc = Account.query.filter_by(name='CGST Payable').first()
+    sgst_acc = Account.query.filter_by(name='SGST Payable').first()
+    igst_acc = Account.query.filter_by(name='IGST Payable').first()
+    gst_payable = 0
+    if cgst_acc:
+        gst_payable += get_account_balance(cgst_acc.id)
+    if sgst_acc:
+        gst_payable += get_account_balance(sgst_acc.id)
+    if igst_acc:
+        gst_payable += get_account_balance(igst_acc.id)
+    
+    monthly_data = get_monthly_revenue_expense(months=6)
 
     return render_template('accountant_dashboard.html',
                          total_employees=total_employees,
@@ -157,4 +213,9 @@ def accountant_dashboard():
                          sales_by_month=sales_by_month,
                          salary_by_month=salary_by_month,
                          revenue_vs_expenses=revenue_vs_expenses,
-                         inventory_items=inventory_items)
+                         inventory_items=inventory_items,
+                         revenue_mtd=revenue_mtd,
+                         profit_mtd=profit_mtd,
+                         ar_outstanding=ar_outstanding,
+                         gst_payable=gst_payable,
+                         monthly_data=monthly_data)

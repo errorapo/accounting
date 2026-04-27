@@ -3,92 +3,108 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Rock Mining ERP</title>
+    <title>Login - RockERP</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-dark: #0f0f1a;
-            --bg-card: #1a1a2e;
-            --bg-header: #16213e;
-            --accent-blue: #00d4ff;
-            --accent-blue-dim: #0f3460;
-            --text-light: #e0e0e0;
-            --danger: #ff4757;
+            --sidebar-bg: #0A1628;
+            --blue: #1A56DB;
+            --border: #E2E8F0;
+            --text-dark: #1E293B;
+            --text-muted: #64748B;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Segoe UI', Arial, sans-serif; 
-            background: linear-gradient(135deg, var(--bg-dark), var(--bg-header)); 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--sidebar-bg);
             min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        .login-box { 
-            background: var(--bg-card); 
-            padding: 40px; 
-            border-radius: 15px; 
-            box-shadow: 0 10px 40px rgba(0,0,0,0.5), inset 0 0 0 1px var(--accent-blue-dim);
-            width: 350px;
+        .login-card {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 380px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
         }
-        h1 { 
-            color: var(--accent-blue); 
-            text-align: center; 
-            margin-bottom: 30px; 
-            text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
-            font-size: 28px;
-        }
-        .form-group { margin-bottom: 20px; }
-        label { 
-            display: block; 
-            margin-bottom: 8px; 
-            font-weight: bold; 
-            color: var(--accent-blue);
-            font-size: 14px;
-        }
-        input { 
-            width: 100%; 
-            padding: 14px; 
-            border: 1px solid var(--accent-blue-dim); 
-            border-radius: 8px; 
-            background: var(--bg-dark);
-            color: var(--text-light);
-            font-size: 16px;
-        }
-        input:focus { 
-            outline: none; 
-            border-color: var(--accent-blue);
-            box-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
-        }
-        button { 
-            width: 100%; 
-            padding: 14px; 
-            background: linear-gradient(135deg, var(--accent-blue), #0099cc); 
-            color: var(--bg-dark); 
-            border: none; 
-            border-radius: 8px; 
-            cursor: pointer; 
-            font-size: 16px; 
-            font-weight: bold;
-            transition: all 0.3s;
-            box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
-        }
-        button:hover { 
-            background: linear-gradient(135deg, #00e5ff, #00d4ff); 
-            box-shadow: 0 0 30px rgba(0, 212, 255, 0.6);
-            transform: translateY(-2px);
-        }
-        .flash { padding: 12px; margin-bottom: 15px; border-radius: 5px; }
-        .flash.error { 
-            background: rgba(255, 71, 87, 0.2); 
-            color: var(--danger); 
-            border: 1px solid var(--danger); 
+        .login-logo {
             text-align: center;
+            margin-bottom: 32px;
+        }
+        .login-logo h1 {
+            font-size: 28px;
+            color: var(--sidebar-bg);
+            font-weight: 600;
+        }
+        .login-logo p {
+            color: var(--text-muted);
+            font-size: 13px;
+            margin-top: 4px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-dark);
+            margin-bottom: 6px;
+        }
+        .form-input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: var(--blue);
+            box-shadow: 0 0 0 3px rgba(26,86,219,0.1);
+        }
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: var(--blue);
+            color: white;
+            border: none;
+            border-radius: 7px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            background: #1e40af;
+        }
+        .flash {
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            text-align: center;
+        }
+        .flash.error {
+            background: #FEE2E2;
+            color: #EF4444;
+            border-left: 3px solid #EF4444;
         }
     </style>
 </head>
 <body>
-    <div class="login-box">
-        <h1>Rock Mining ERP</h1>
+    <div class="login-card">
+        <div class="login-logo">
+            <h1>RockERP</h1>
+            <p>Mining Accounting</p>
+        </div>
+        
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -96,17 +112,18 @@
                 {% endfor %}
             {% endif %}
         {% endwith %}
+        
         <form method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
-                <label>Username</label>
-                <input type="text" name="username" required>
+                <label class="form-label">Username</label>
+                <input type="text" name="username" class="form-input" required>
             </div>
             <div class="form-group">
-                <label>Password</label>
-                <input type="password" name="password" required>
+                <label class="form-label">Password</label>
+                <input type="password" name="password" class="form-input" required>
             </div>
-            <button type="submit">Login</button>
+            <button type="submit" class="btn">Login</button>
         </form>
     </div>
 </body>

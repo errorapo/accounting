@@ -1,19 +1,25 @@
 {% extends "base.html" %}
-{% block title %}Inventory{% endblock %}
+{% block page_title %}Inventory{% endblock %}
+
 {% block content %}
 <div class="card">
-    <h2>Inventory <a href="{{ url_for('inventory.add_item') }}" class="btn" style="float: right;">Add Item</a></h2>
+    <div class="card-header">
+        <div class="card-title">Inventory</div>
+        <a href="{{ url_for('inventory.add_item') }}" class="btn btn-primary">+ Add Item</a>
+    </div>
+    
+    {% if items %}
     <table>
         <thead>
             <tr>
                 <th>ID</th>
                 <th>Stone Type</th>
                 <th>Size</th>
-                <th>Opening</th>
-                <th>Purchases</th>
-                <th>Sales</th>
-                <th>Closing Stock</th>
-                <th>Rate/Ton</th>
+                <th style="text-align: right;">Opening</th>
+                <th style="text-align: right;">Purchases</th>
+                <th style="text-align: right;">Sales</th>
+                <th style="text-align: right;">Closing</th>
+                <th style="text-align: right;">Rate/Ton</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -23,19 +29,25 @@
                 <td>{{ item.id }}</td>
                 <td>{{ item.stone_type }}</td>
                 <td>{{ item.size }}</td>
-                <td>{{ item.opening_stock }}</td>
-                <td>{{ item.purchases }}</td>
-                <td>{{ item.sales }}</td>
-                <td>{{ item.closing_stock }}</td>
-                <td>₹{{ "%.2f"|format(item.rate_per_ton) }}</td>
-                <td class="actions">
-                    <a href="{{ url_for('inventory.purchase_item', id=item.id) }}" class="btn">Purchase</a>
-                    <a href="{{ url_for('inventory.sale_item', id=item.id) }}" class="btn">Sale</a>
-                    <a href="{{ url_for('inventory.edit_item', id=item.id) }}" class="btn">Edit</a>
+                <td class="amount">{{ item.opening_stock }} ton</td>
+                <td class="amount">{{ item.purchases }} ton</td>
+                <td class="amount">{{ item.sales }} ton</td>
+                <td class="amount" style="font-weight: 500;">{{ item.closing_stock }} ton</td>
+                <td class="amount">{{ item.rate_per_ton|format_inr }}</td>
+                <td>
+                    <a href="{{ url_for('inventory.edit_item', id=item.id) }}" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">Edit</a>
                 </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+    {% else %}
+    <div class="empty-state">
+        <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+        <h3>No inventory yet</h3>
+        <p>Add your first inventory item to get started</p>
+        <a href="{{ url_for('inventory.add_item') }}" class="btn btn-primary">Add First Item</a>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

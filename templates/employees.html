@@ -1,17 +1,23 @@
 {% extends "base.html" %}
-{% block title %}Employees{% endblock %}
+{% block page_title %}Employees{% endblock %}
+
 {% block content %}
 <div class="card">
-    <h2>Employees <a href="{{ url_for('payroll.add_employee') }}" class="btn" style="float: right;">Add Employee</a></h2>
+    <div class="card-header">
+        <div class="card-title">Employees</div>
+        <a href="{{ url_for('payroll.add_employee') }}" class="btn btn-primary">+ Add Employee</a>
+    </div>
+    
+    {% if employees %}
     <table>
         <thead>
             <tr>
                 <th>ID</th>
                 <th>Name</th>
                 <th>Type</th>
-                <th>Base Salary</th>
-                <th>Hourly Rate</th>
-                <th>PF Rate %</th>
+                <th style="text-align: right;">Base Salary</th>
+                <th style="text-align: right;">Hourly Rate</th>
+                <th>PF Rate</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -21,16 +27,23 @@
                 <td>{{ employee.id }}</td>
                 <td>{{ employee.name }}</td>
                 <td>{{ employee.employee_type }}</td>
-                <td>₹{{ "%.2f"|format(employee.base_salary) }}</td>
-                <td>₹{{ "%.2f"|format(employee.hourly_rate) }}</td>
+                <td class="amount">{{ employee.base_salary|format_inr }}</td>
+                <td class="amount">{{ employee.hourly_rate|format_inr }}</td>
                 <td>{{ employee.pf_rate }}%</td>
-                <td class="actions">
-                    <a href="{{ url_for('payroll.edit_employee', id=employee.id) }}" class="btn">Edit</a>
-                    <a href="{{ url_for('payroll.delete_employee', id=employee.id) }}" class="btn btn-danger">Delete</a>
+                <td>
+                    <a href="{{ url_for('payroll.edit_employee', id=employee.id) }}" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">Edit</a>
                 </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+    {% else %}
+    <div class="empty-state">
+        <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        <h3>No employees yet</h3>
+        <p>Add your first employee to get started</p>
+        <a href="{{ url_for('payroll.add_employee') }}" class="btn btn-primary">Add First Employee</a>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

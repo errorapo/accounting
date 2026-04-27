@@ -324,6 +324,8 @@ def get_balance_sheet(as_of_date=None):
         accounts = Account.query.filter_by(account_type=acc_type, is_active=True).all()
 
         for account in accounts:
+            if acc_type == 'capital' and account.name == 'Retained Earnings':
+                continue  # handled below via consolidated prior + current calculation
             balance = get_account_balance(account.id, report_date)
             if balance != 0:
                 if acc_type == 'asset':
@@ -557,8 +559,9 @@ def record_purchase(date, vendor_name, amount, gst_amount, itc_eligible=True, pa
 
     # Update inventory weighted average cost
     if is_inventory_purchase and item:
+        unit_cost = amount / quantity if quantity > 0 else 0
         new_stock = (item.closing_stock or 0) + quantity
-        new_total_cost = (item.closing_stock or 0) * (item.rate_per_ton or 0) + quantity * rate
+        new_total_cost = (item.closing_stock or 0) * (item.rate_per_ton or 0) + quantity * unit_cost
         if new_stock > 0:
             item.rate_per_ton = new_total_cost / new_stock
         item.total_cost = new_total_cost
@@ -793,11 +796,11 @@ def record_purchase_payment(date, purchase_id, amount, payment_mode='cash', note
         'description': desc
     }
 
-def record_gst_payment(date, amount, payment_mode='bank', notes=''):
+def record_gst_payment(date, amount, payment_mode='bank', notes='', gst_type='all'):
     """Record GST paid to Government.
 
     Journal Entry:
-        Debit:  GST Payable (reduces liability)
+        Debit:  CGST/SGST/IGST Payable (reduces liability)
         Credit: Bank/Cash (payment method)
 
     Args:
@@ -805,6 +808,7 @@ def record_gst_payment(date, amount, payment_mode='bank', notes=''):
         amount: GST amount being paid
         payment_mode: 'bank', 'cash', 'upi'
         notes: Optional notes
+        gst_type: 'cgst', 'sgst', 'igst', 'all', or 'legacy'
 
     Returns:
         dict with payment details
@@ -815,8 +819,6 @@ def record_gst_payment(date, amount, payment_mode='bank', notes=''):
     if amount <= 0:
         raise ValueError("Amount must be positive")
 
-    gst_payable = get_or_create_account('GST Payable', 'liability')
-
     if payment_mode == 'cash':
         credit_account = get_or_create_account('Cash', 'asset')
     else:
@@ -824,12 +826,32 @@ def record_gst_payment(date, amount, payment_mode='bank', notes=''):
 
     desc = "GST Paid to Government"
 
-    create_journal_entry(date, desc, gst_payable.id, credit_account.id, amount)
+    if gst_type == 'legacy':
+        gst_payable = get_or_create_account('GST Payable', 'liability')
+        create_journal_entry(date, desc, gst_payable.id, credit_account.id, amount)
+    elif gst_type == 'all':
+        split_amount = amount / 2
+        cgst_payable = get_or_create_account('CGST Payable', 'liability')
+        sgst_payable = get_or_create_account('SGST Payable', 'liability')
+        create_journal_entry(date, desc + " - CGST", cgst_payable.id, credit_account.id, split_amount)
+        create_journal_entry(date, desc + " - SGST", sgst_payable.id, credit_account.id, split_amount)
+    elif gst_type == 'cgst':
+        cgst_payable = get_or_create_account('CGST Payable', 'liability')
+        create_journal_entry(date, desc + " - CGST", cgst_payable.id, credit_account.id, amount)
+    elif gst_type == 'sgst':
+        sgst_payable = get_or_create_account('SGST Payable', 'liability')
+        create_journal_entry(date, desc + " - SGST", sgst_payable.id, credit_account.id, amount)
+    elif gst_type == 'igst':
+        igst_payable = get_or_create_account('IGST Payable', 'liability')
+        create_journal_entry(date, desc + " - IGST", igst_payable.id, credit_account.id, amount)
+    else:
+        raise ValueError("Invalid gst_type: must be 'cgst', 'sgst', 'igst', 'all', or 'legacy'")
 
     return {
         'type': 'gst_payment',
         'amount': amount,
         'payment_mode': payment_mode,
+        'gst_type': gst_type,
         'notes': notes,
         'description': desc
     }
@@ -892,3 +914,69 @@ def run_monthly_depreciation(as_of_date=None):
         'month': month_key,
         'errors': errors
     }
+
+def get_monthly_revenue_expense(months=6):
+    """Get monthly revenue and expense data for charts.
+    
+    Args:
+        months: Number of months to return (default 6)
+    
+    Returns:
+        dict with labels (month names), revenue list, expense list
+    """
+    from datetime import date, timedelta
+    from models import Transaction, Account
+    from decimal import Decimal
+    
+    today = date.today()
+    result = {
+        'labels': [],
+        'revenue': [],
+        'expenses': []
+    }
+    
+    sales_acc = Account.query.filter_by(name='Sales Revenue').first()
+    expense_accounts = Account.query.filter_by(account_type='expense').all()
+    expense_ids = [a.id for a in expense_accounts]
+    
+    for i in range(months - 1, -1, -1):
+        month_date = date(today.year, today.month - i, 1) if today.month - i > 0 else date(today.year - 1, 12 + today.month - i, 1)
+        
+        if today.month - i <= 0:
+            month_date = date(today.year - 1, 12 + today.month - i, 1)
+        
+        if i == 0:
+            end_month = date(today.year, today.month, 28) if today.month < 12 else date(today.year + 1, 1, 28)
+        else:
+            next_month = date(today.year, today.month - i + 1, 1) if today.month - i + 1 > 0 else date(today.year - 1, 12, 1)
+            if today.month - i + 1 <= 0:
+                next_month = date(today.year - 1, 12 + today.month - i + 1, 1)
+            end_month = next_month - timedelta(days=1)
+        
+        month_name = month_date.strftime('%b')
+        result['labels'].append(month_name)
+        
+        revenue = 0
+        expenses = 0
+        
+        if sales_acc:
+            rev_trans = Transaction.query.filter(
+                Transaction.account_id == sales_acc.id,
+                Transaction.date >= month_date,
+                Transaction.date <= end_month,
+                Transaction.is_posted == True
+            ).all()
+            revenue = sum(t.credit or 0 for t in rev_trans)
+        
+        exp_trans = Transaction.query.filter(
+            Transaction.account_id.in_(expense_ids),
+            Transaction.date >= month_date,
+            Transaction.date <= end_month,
+            Transaction.is_posted == True
+        ).all()
+        expenses = sum(t.debit or 0 for t in exp_trans)
+        
+        result['revenue'].append(float(revenue))
+        result['expenses'].append(float(expenses))
+    
+    return result

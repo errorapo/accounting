@@ -1,8 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Customers{% endblock %}
+{% block page_title %}Customers{% endblock %}
+
 {% block content %}
 <div class="card">
-    <h2>Customers <a href="{{ url_for('sales.add_customer') }}" class="btn" style="float: right;">Add Customer</a></h2>
+    <div class="card-header">
+        <div class="card-title">Customers</div>
+        <a href="{{ url_for('sales.add_customer') }}" class="btn btn-primary">+ Add Customer</a>
+    </div>
+    
+    {% if customers %}
     <table>
         <thead>
             <tr>
@@ -10,18 +16,30 @@
                 <th>Name</th>
                 <th>Phone</th>
                 <th>Address</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for customer in customers %}
             <tr>
                 <td>{{ customer.id }}</td>
-                <td>{{ customer.name }}</td>
+                <td style="font-weight: 500;">{{ customer.name }}</td>
                 <td>{{ customer.phone }}</td>
                 <td>{{ customer.address }}</td>
+                <td>
+                    <a href="{{ url_for('sales.create_sale') }}?customer={{ customer.id }}" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">+ Sale</a>
+                </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+    {% else %}
+    <div class="empty-state">
+        <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        <h3>No customers yet</h3>
+        <p>Add your first customer to get started</p>
+        <a href="{{ url_for('sales.add_customer') }}" class="btn btn-primary">Add First Customer</a>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

@@ -1,50 +1,57 @@
 {% extends "base.html" %}
-{% block title %}Purchases{% endblock %}
+{% block page_title %}Purchases{% endblock %}
+
 {% block content %}
 <div class="card">
-    <h2>Purchases <a href="{{ url_for('purchases.create_purchase') }}" class="btn" style="float: right;">New Purchase</a></h2>
+    <div class="card-header">
+        <div class="card-title">Purchase Invoices</div>
+        <a href="{{ url_for('purchases.create_purchase') }}" class="btn btn-primary">+ New Purchase</a>
+    </div>
+    
+    {% if purchases %}
     <table>
         <thead>
             <tr>
                 <th>Invoice #</th>
                 <th>Date</th>
                 <th>Vendor</th>
-                <th>Stone Type</th>
-                <th>Size</th>
-                <th>Quantity</th>
-                <th>Amount</th>
-                <th>GST</th>
-                <th>Total</th>
-                <th>Payment</th>
+                <th>Item</th>
+                <th>Qty</th>
+                <th style="text-align: right;">Amount</th>
+                <th style="text-align: right;">GST</th>
+                <th style="text-align: right;">Total</th>
                 <th>Status</th>
             </tr>
         </thead>
         <tbody>
             {% for purchase in purchases %}
             <tr>
-                <td>{{ purchase.invoice_number or purchase.id }}</td>
-                <td>
-                    <a href="{{ url_for('purchases.invoice', id=purchase.id) }}">{{ purchase.invoice_date }}</a>
-                </td>
-                <td>{{ purchase.vendor.name if purchase.vendor else purchase.vendor_name }}</td>
-                <td>{{ purchase.stone_type }}</td>
-                <td>{{ purchase.size }}</td>
-                <td>{{ purchase.quantity }}</td>
-                <td>₹{{ "%.2f"|format(purchase.amount) }}</td>
-                <td>₹{{ "%.2f"|format(purchase.gst_amount) }}</td>
-                <td>₹{{ "%.2f"|format(purchase.total_amount) }}</td>
-                <td>{{ purchase.payment_type }}</td>
+                <td>#{{ purchase.invoice_number or purchase.id }}</td>
+                <td>{{ purchase.invoice_date.strftime('%d %b %Y') }}</td>
+                <td>{{ purchase.vendor.name if purchase.vendor else 'N/A' }}</td>
+                <td>{{ purchase.stone_type }} {{ purchase.size }}</td>
+                <td>{{ purchase.quantity }} ton</td>
+                <td class="amount">{{ purchase.amount|format_inr }}</td>
+                <td class="amount">{{ purchase.gst_amount|format_inr }}</td>
+                <td class="amount">{{ purchase.total_amount|format_inr }}</td>
                 <td>
                     {% if purchase.payment_status == 'paid' %}
-                    <span style="color: green;">Paid</span>
+                    <span class="badge paid">Paid</span>
                     {% else %}
-                    <span style="color: orange;">Pending</span>
-                    <a href="{{ url_for('purchases.add_payment', id=purchase.id) }}">Record Payment</a>
+                    <span class="badge pending">Pending</span>
                     {% endif %}
                 </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+    {% else %}
+    <div class="empty-state">
+        <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+        <h3>No purchases yet</h3>
+        <p>Create your first purchase to get started</p>
+        <a href="{{ url_for('purchases.create_purchase') }}" class="btn btn-primary">Create First Purchase</a>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

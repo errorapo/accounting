@@ -1,8 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Vendors{% endblock %}
+{% block page_title %}Vendors{% endblock %}
+
 {% block content %}
 <div class="card">
-    <h2>Vendors <a href="{{ url_for('vendor.add_vendor') }}" class="btn" style="float: right;">Add Vendor</a></h2>
+    <div class="card-header">
+        <div class="card-title">Vendors</div>
+        <a href="{{ url_for('vendor.add_vendor') }}" class="btn btn-primary">+ Add Vendor</a>
+    </div>
+    
+    {% if vendors %}
     <table>
         <thead>
             <tr>
@@ -18,21 +24,24 @@
             {% for vendor in vendors %}
             <tr>
                 <td>{{ vendor.id }}</td>
-                <td>{{ vendor.name }}</td>
+                <td style="font-weight: 500;">{{ vendor.name }}</td>
                 <td>{{ vendor.phone }}</td>
                 <td>{{ vendor.gstin }}</td>
                 <td>{{ vendor.state }}</td>
                 <td>
-                    <a href="{{ url_for('vendor.edit_vendor', id=vendor.id) }}">Edit</a> |
-                    <a href="{{ url_for('vendor.delete_vendor', id=vendor.id) }}" onclick="return confirm('Delete vendor?')">Delete</a>
+                    <a href="{{ url_for('vendor.edit_vendor', id=vendor.id) }}" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">Edit</a>
                 </td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="6">No vendors found. <a href="{{ url_for('vendor.add_vendor') }}">Add one</a></td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+    {% else %}
+    <div class="empty-state">
+        <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/></svg>
+        <h3>No vendors yet</h3>
+        <p>Add your first vendor to get started</p>
+        <a href="{{ url_for('vendor.add_vendor') }}" class="btn btn-primary">Add First Vendor</a>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

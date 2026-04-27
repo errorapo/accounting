@@ -169,7 +169,8 @@ def gst_report():
     output_gst_total = output_cgst + output_sgst + output_igst
     input_gst_total = input_cgst + input_sgst + input_igst
     itc_non_eligible_gst = input_non_itc_cgst + input_non_itc_sgst + input_non_itc_igst
-
+    net_gst = (net_cgst + net_sgst + net_igst)
+    
     return render_template('gst_report.html',
                     output_cgst=output_cgst,
                     output_sgst=output_sgst,
@@ -180,6 +181,7 @@ def gst_report():
                     net_cgst=net_cgst,
                     net_sgst=net_sgst,
                     net_igst=net_igst,
+                    net_gst=net_gst,
                     output_gst_total=output_gst_total,
                     input_gst_total=input_gst_total,
                     itc_non_eligible_gst=itc_non_eligible_gst,
@@ -197,36 +199,31 @@ def gst_pay():
         amount = float(request.form.get('amount', 0))
         payment_mode = request.form.get('payment_mode', 'bank')
         notes = request.form.get('notes', '')
+        gst_type = request.form.get('gst_type', 'all')
 
         if amount <= 0:
             flash('Amount must be positive', 'error')
             return redirect(url_for('reports.gst_report'))
 
-        # Get current GST liability
-        gst_payable_acc = get_or_create_account('GST Payable', 'liability')
-        current_liability = get_account_balance(gst_payable_acc.id)
-
-        if amount > current_liability:
-            flash(f'Amount exceeds GST liability of ₹{current_liability:.2f}', 'error')
-            return redirect(url_for('reports.gst_report'))
-
-        # Record the payment
-        record_gst_payment(date.today(), amount, payment_mode, notes)
+        record_gst_payment(date.today(), amount, payment_mode, notes, gst_type)
         flash(f'GST payment of ₹{amount:.2f} recorded', 'success')
         return redirect(url_for('reports.gst_report'))
 
     # GET - show payment form
-    gst_payable_acc = get_or_create_account('GST Payable', 'liability')
-    gst_receivable_acc = get_or_create_account('GST Receivable', 'asset')
+    cgst_acc = get_or_create_account('CGST Payable', 'liability')
+    sgst_acc = get_or_create_account('SGST Payable', 'liability')
+    igst_acc = get_or_create_account('IGST Payable', 'liability')
 
-    gst_payable = get_account_balance(gst_payable_acc.id)
-    gst_receivable = get_account_balance(gst_receivable_acc.id)
-    net_liability = gst_payable - gst_receivable
+    cgst_balance = get_account_balance(cgst_acc.id)
+    sgst_balance = get_account_balance(sgst_acc.id)
+    igst_balance = get_account_balance(igst_acc.id)
+    total_liability = cgst_balance + sgst_balance + igst_balance
 
     return render_template('gst_payment.html',
-                    net_liability=net_liability,
-                    gst_payable=gst_payable,
-                    gst_receivable=gst_receivable)
+                    total_liability=total_liability,
+                    cgst_balance=cgst_balance,
+                    sgst_balance=sgst_balance,
+                    igst_balance=igst_balance)
 
 @bp.route('/reports/payroll-summary')
 @login_required

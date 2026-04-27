@@ -1,31 +1,45 @@
 {% extends "base.html" %}
-{% block title %}Add Vendor{% endblock %}
+{% block page_title %}Add Vendor{% endblock %}
+
 {% block content %}
 <div class="card">
-    <h2>Add Vendor</h2>
-    <form method="post">
+    <div class="card-header">
+        <div class="card-title">Add Vendor</div>
+    </div>
+    
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-group">
-            <label>Vendor Name *</label>
-            <input type="text" name="name" required>
+            <label class="form-label">Vendor Name *</label>
+            <input type="text" name="name" class="form-input" placeholder="Company name" required>
         </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Phone</label>
+                <input type="tel" name="phone" class="form-input" placeholder="9876543210">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">GSTIN</label>
+                <input type="text" name="gstin" class="form-input" placeholder="27AAAAA0000A1Z1">
+            </div>
+        </div>
+        
         <div class="form-group">
-            <label>Phone</label>
-            <input type="text" name="phone">
+            <label class="form-label">State</label>
+            <input type="text" name="state" class="form-input" placeholder="Maharashtra">
         </div>
+        
         <div class="form-group">
-            <label>Address</label>
-            <textarea name="address" rows="3"></textarea>
+            <label class="form-label">Address</label>
+            <textarea name="address" class="form-input" rows="3" placeholder="Full address"></textarea>
         </div>
-        <div class="form-group">
-            <label>GSTIN</label>
-            <input type="text" name="gstin" placeholder="27AAAAA0000A1Z1">
+        
+        <div style="margin-top: 24px; display: flex; gap: 12px;">
+            <button type="submit" class="btn btn-primary">Save Vendor</button>
+            <a href="{{ url_for('vendor.vendors_list') }}" class="btn btn-secondary">Cancel</a>
         </div>
-        <div class="form-group">
-            <label>State</label>
-            <input type="text" name="state" placeholder="Maharashtra">
-        </div>
-        <button type="submit" class="btn">Save Vendor</button>
-        <a href="{{ url_for('vendor.vendors_list') }}" class="btn btn-secondary">Cancel</a>
     </form>
 </div>
 {% endblock %}

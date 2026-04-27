@@ -192,42 +192,64 @@ def test_reversal_entry_nets_to_zero(app_context):
     from decimal import Decimal
     
     cash = Account.query.filter_by(name='Cash').first()
+    sales = Account.query.filter_by(name='Sales Revenue').first()
     
-    # Create a journal entry
+    # Create a journal entry: debit Cash, credit Sales Revenue, amount=1000
     journal = JournalEntry(
         date=date.today(),
-        description='Test Entry',
+        description='Test Sale',
         debit_account_id=cash.id,
-        credit_account_id=cash.id,
+        credit_account_id=sales.id,
         amount=Decimal('1000')
     )
     db.session.add(journal)
+    db.session.flush()
+    
+    # Add Transaction rows manually
+    db.session.add(Transaction(
+        date=date.today(), description='Test Sale',
+        account_id=cash.id, debit=Decimal('1000'), credit=0,
+        entry_type='debit', is_posted=True, original_entry_id=journal.id
+    ))
+    db.session.add(Transaction(
+        date=date.today(), description='Test Sale',
+        account_id=sales.id, debit=0, credit=Decimal('1000'),
+        entry_type='credit', is_posted=True, original_entry_id=journal.id
+    ))
     db.session.commit()
+    
+    # Assert Sales Revenue balance == 1000 before reversal
+    sales_balance_before = get_account_balance(sales.id)
+    assert sales_balance_before == Decimal('1000'), f"Sales should be 1000 before reversal, got {sales_balance_before}"
     
     # Reverse it
     reverse_journal_entry(journal.id)
     
-    # Check balance
-    balance = get_account_balance(cash.id)
-    assert balance == 0, f"Balance should be 0, got {balance}"
+    # Assert Sales Revenue balance == 0 after reversal (reversal debited Sales Revenue)
+    sales_balance_after = get_account_balance(sales.id)
+    assert sales_balance_after == 0, f"Sales should be 0 after reversal, got {sales_balance_after}"
 
 
 def test_gst_payment_reduces_liability(app_context):
-    """Recording GST payment creates a payment journal entry."""
+    """Recording GST payment reduces CGST/SGST liabilities."""
     from decimal import Decimal
     
-    # Record a sale (creates GST liability)
-    # Note: Uses new CGST/SGST split, but record_gst_payment works with generic GST Payable
-    record_sale(date.today(), 'Customer1', Decimal('10000'), Decimal('500'),
-               payment_type='cash')
+    record_sale(date.today(), 'Customer1', Decimal('10000'), Decimal('1800'),
+               payment_type='cash', supply_type='intra')
     
-    # Check generic GST Payable (legacy - some entries still go here)
-    gst_payable = Account.query.filter_by(name='GST Payable').first()
-    balance_before = get_account_balance(gst_payable.id)
+    cgst_acc = Account.query.filter_by(name='CGST Payable').first()
+    sgst_acc = Account.query.filter_by(name='SGST Payable').first()
     
-    # Record any GST payment 
-    record_gst_payment(date.today(), Decimal('100'), payment_mode='cash')
+    cgst_before = get_account_balance(cgst_acc.id)
+    sgst_before = get_account_balance(sgst_acc.id)
     
-    # Just verify the function executes properly
-    # (The full CGST/SGST payment logic needs enhancement in record_gst_payment)
-    assert True, "GST payment executed without error"
+    assert cgst_before == Decimal('900'), f"CGST should be 900, got {cgst_before}"
+    assert sgst_before == Decimal('900'), f"SGST should be 900, got {sgst_before}"
+    
+    record_gst_payment(date.today(), Decimal('1800'), payment_mode='cash', gst_type='all')
+    
+    cgst_after = get_account_balance(cgst_acc.id)
+    sgst_after = get_account_balance(sgst_acc.id)
+    
+    assert cgst_after == Decimal('0'), f"CGST should be 0, got {cgst_after}"
+    assert sgst_after == Decimal('0'), f"SGST should be 0, got {sgst_after}"

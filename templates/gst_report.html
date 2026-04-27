@@ -1,117 +1,78 @@
 {% extends "base.html" %}
-{% block title %}GST Report{% endblock %}
+{% block page_title %}GST Report{% endblock %}
+
 {% block content %}
 <div class="card">
-    <h2>GST Report</h2>
-    <p style="color: #666; margin-bottom: 15px;">Period: {{ start_date }} to {{ end_date }}</p>
-    <form method="get" style="margin-bottom: 20px;">
-        <label>Start Date: </label>
-        <input type="date" name="start_date" value="{{ start_date }}">
-        <label>End Date: </label>
-        <input type="date" name="end_date" value="{{ end_date }}">
-        <button type="submit" class="btn">Generate</button>
-    </form>
-
-    <h3 style="color: var(--accent-blue);">Output GST (Sales)</h3>
-    <table>
-        <tr>
-            <th>Tax Type</th>
-            <th>Amount (₹)</th>
-        </tr>
-        <tr>
-            <td>CGST</td>
-            <td>₹{{ "%.2f"|format(output_cgst) }}</td>
-        </tr>
-        <tr>
-            <td>SGST</td>
-            <td>₹{{ "%.2f"|format(output_sgst) }}</td>
-        </tr>
-        <tr>
-            <td>IGST</td>
-            <td>₹{{ "%.2f"|format(output_igst) }}</td>
-        </tr>
-        <tr style="font-weight: bold;">
-            <td>Total Output GST</td>
-            <td>₹{{ "%.2f"|format(output_gst_total) }}</td>
-        </tr>
-    </table>
-
-    <h3 style="color: var(--accent-blue); margin-top: 20px;">Input GST (Purchases - ITC Eligible)</h3>
-    <table>
-        <tr>
-            <th>Tax Type</th>
-            <th>Amount (₹)</th>
-        </tr>
-        <tr>
-            <td>CGST</td>
-            <td>₹{{ "%.2f"|format(input_cgst) }}</td>
-        </tr>
-        <tr>
-            <td>SGST</td>
-            <td>₹{{ "%.2f"|format(input_sgst) }}</td>
-        </tr>
-        <tr>
-            <td>IGST</td>
-            <td>₹{{ "%.2f"|format(input_igst) }}</td>
-        </tr>
-        <tr style="font-weight: bold;">
-            <td>Total ITC Available</td>
-            <td>₹{{ "%.2f"|format(input_gst_total) }}</td>
-        </tr>
-    </table>
-
-    <h3 style="color: var(--accent-blue); margin-top: 20px;">Non-ITC Purchases</h3>
-    <table>
-        <tr>
-            <td>CGST (Non-eligible)</td>
-            <td>₹{{ "%.2f"|format(itc_non_eligible_gst) }}</td>
-        </tr>
-    </table>
-
-    <h3 style="color: var(--accent-blue); margin-top: 20px;">Net GST Liability</h3>
-    <table>
-        <tr>
-            <th>Tax Type</th>
-            <th>Output</th>
-            <th>Less: ITC</th>
-            <th>Net</th>
-        </tr>
-        <tr>
-            <td>CGST</td>
-            <td>₹{{ "%.2f"|format(output_cgst) }}</td>
-            <td>(₹{{ "%.2f"|format(input_cgst) }})</td>
-            <td>₹{{ "%.2f"|format(net_cgst) }}</td>
-        </tr>
-        <tr>
-            <td>SGST</td>
-            <td>₹{{ "%.2f"|format(output_sgst) }}</td>
-            <td>(₹{{ "%.2f"|format(input_sgst) }})</td>
-            <td>₹{{ "%.2f"|format(net_sgst) }}</td>
-        </tr>
-        <tr>
-            <td>IGST</td>
-            <td>₹{{ "%.2f"|format(output_igst) }}</td>
-            <td>(₹{{ "%.2f"|format(input_igst) }})</td>
-            <td>₹{{ "%.2f"|format(net_igst) }}</td>
-        </tr>
-        <tr style="font-weight: bold; font-size: 18px; background: {% if net_cgst + net_sgst + net_igst > 0 %}#f8d7da{% else %}#d4edda{% endif %};">
-            <td>Total Net GST</td>
-            <td>₹{{ "%.2f"|format(output_gst_total) }}</td>
-            <td>(₹{{ "%.2f"|format(input_gst_total) }})</td>
-            <td>₹{{ "%.2f"|format(net_cgst + net_sgst + net_igst) }}</td>
-        </tr>
-    </table>
-
-    {% set total_net = net_cgst + net_sgst + net_igst %}
-    {% if total_net > 0 %}
-    <p style="color: red; font-size: 18px;">GST to be paid: <strong>₹{{ "%.2f"|format(total_net) }}</strong></p>
-    <a href="{{ url_for('reports.gst_pay') }}" class="btn btn-success">Pay GST to Government</a>
-    {% elif total_net < 0 %}
-    <p style="color: green; font-size: 18px;">ITC available to carry forward: ₹{{ "%.2f"|format(total_net|abs) }}</p>
-    {% else %}
-    <p style="color: blue;">No GST liability</p>
-    {% endif %}
-
-    <a href="{{ url_for('reports.index') }}" class="btn" style="margin-top: 15px;">Back to Reports</a>
+    <div class="card-header">
+        <div class="card-title">GST Report</div>
+        <form method="get" style="display: flex; gap: 8px; align-items: center;">
+            <input type="date" name="start_date" value="{{ start_date }}" style="padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px;">
+            <span style="color: var(--text-muted);">to</span>
+            <input type="date" name="end_date" value="{{ end_date }}" style="padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px;">
+            <button type="submit" class="btn btn-secondary" style="padding: 6px 12px;">Generate</button>
+        </form>
+    </div>
+    
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+        <div>
+            <h3 style="font-size: 13px; color: var(--blue); margin-bottom: 12px; text-transform: uppercase;">Output GST (Sales)</h3>
+            <table>
+                <tr>
+                    <td>CGST</td>
+                    <td class="amount">{{ output_cgst|format_inr }}</td>
+                </tr>
+                <tr>
+                    <td>SGST</td>
+                    <td class="amount">{{ output_sgst|format_inr }}</td>
+                </tr>
+                <tr>
+                    <td>IGST</td>
+                    <td class="amount">{{ output_igst|format_inr }}</td>
+                </tr>
+                <tr style="font-weight: 600; background: rgba(26,86,219,0.1);">
+                    <td>Total Output</td>
+                    <td class="amount">{{ output_gst_total|format_inr }}</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div>
+            <h3 style="font-size: 13px; color: var(--teal); margin-bottom: 12px; text-transform: uppercase;">Input GST (ITC Eligible)</h3>
+            <table>
+                <tr>
+                    <td>CGST</td>
+                    <td class="amount">{{ input_cgst|format_inr }}</td>
+                </tr>
+                <tr>
+                    <td>SGST</td>
+                    <td class="amount">{{ input_sgst|format_inr }}</td>
+                </tr>
+                <tr>
+                    <td>IGST</td>
+                    <td class="amount">{{ input_igst|format_inr }}</td>
+                </tr>
+                <tr style="font-weight: 600; background: rgba(12,166,120,0.1);">
+                    <td>Total Input</td>
+                    <td class="amount">{{ input_gst_total|format_inr }}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    
+    <div style="margin-top: 24px; padding: 20px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; {% if net_gst > 0 %}background: rgba(239,68,68,0.1){% else %}background: rgba(12,166,120,0.1){% endif %};">
+        <div>
+            <div style="font-size: 14px; color: var(--text-muted);">Net GST {% if net_gst > 0 %}Payable{% else %}Receivable{% endif %}</div>
+            <div style="font-size: 24px; font-family: 'DM Mono', monospace; font-weight: 600; {% if net_gst > 0 %}color: var(--red){% else %}color: var(--teal){% endif %};">{{ net_gst|format_inr }}</div>
+        </div>
+        <div>
+            {% if net_gst > 0 %}
+            <a href="{{ url_for('reports.gst_pay') }}" class="btn btn-primary">Pay GST</a>
+            {% else %}
+            <span class="badge paid" style="padding: 10px 20px; font-size: 14px;">ITC Available</span>
+            {% endif %}
+        </div>
+    </div>
+    
+    <a href="{{ url_for('reports.index') }}" class="btn btn-secondary" style="margin-top: 16px;">Back to Reports</a>
 </div>
 {% endblock %}

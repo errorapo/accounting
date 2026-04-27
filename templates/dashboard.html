@@ -1,30 +1,44 @@
 {% extends "base.html" %}
-{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
 {% block content %}
-<div class="stats">
-    <div class="stat-card">
-        <h3>Active Employees</h3>
-        <div class="value">{{ total_employees }}</div>
+<div class="stats-grid">
+    <div class="stat-card blue">
+        <div class="stat-icon blue">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
+        <div class="stat-label">Total Revenue MTD</div>
+        <div class="stat-value">{{ monthly_sales|format_inr }}</div>
     </div>
-    <div class="stat-card">
-        <h3>Inventory Items</h3>
-        <div class="value">{{ total_inventory }}</div>
+    
+    <div class="stat-card teal">
+        <div class="stat-icon teal">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+        </div>
+        <div class="stat-label">Inventory Items</div>
+        <div class="stat-value">{{ total_inventory }}</div>
     </div>
-    <div class="stat-card">
-        <h3>Monthly Sales</h3>
-        <div class="value">₹{{ "%.2f"|format(monthly_sales) }}</div>
+    
+    <div class="stat-card amber">
+        <div class="stat-icon amber">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        </div>
+        <div class="stat-label">Active Employees</div>
+        <div class="stat-value">{{ total_employees }}</div>
     </div>
 </div>
 
-<div class="card" style="margin-top: 20px;">
-    <h2>Quick Links</h2>
-    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-        <a href="{{ url_for('payroll.employees') }}" class="btn">Manage Employees</a>
-        <a href="{{ url_for('payroll.create_payroll') }}" class="btn">Create Payroll</a>
-        <a href="{{ url_for('inventory.index') }}" class="btn">Manage Inventory</a>
-        <a href="{{ url_for('sales.create_sale') }}" class="btn">Create Sale</a>
-        <a href="{{ url_for('accounts.ledger') }}" class="btn">View Ledger</a>
-        <a href="{{ url_for('reports.trial_balance') }}" class="btn">Trial Balance</a>
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">Quick Links</div>
+    </div>
+    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+        <a href="{{ url_for('payroll.employees') }}" class="btn btn-secondary">Employees</a>
+        <a href="{{ url_for('payroll.create_payroll') }}" class="btn btn-secondary">Create Payroll</a>
+        <a href="{{ url_for('inventory.index') }}" class="btn btn-secondary">Inventory</a>
+        <a href="{{ url_for('sales.create_sale') }}" class="btn btn-primary">+ New Sale</a>
+        <a href="{{ url_for('accounts.ledger') }}" class="btn btn-secondary">Ledger</a>
+        <a href="{{ url_for('reports.trial_balance') }}" class="btn btn-secondary">Trial Balance</a>
     </div>
 </div>
 {% endblock %}

@@ -1,29 +1,69 @@
 {% extends "base.html" %}
-{% block title %}Accounts{% endblock %}
+{% block page_title %}Chart of Accounts{% endblock %}
+
 {% block content %}
 <div class="card">
-    <h2>Chart of Accounts <a href="{{ url_for('accounts.add_account') }}" class="btn" style="float: right;">Add Account</a></h2>
+    <div class="card-header">
+        <div class="card-title">Chart of Accounts</div>
+        <a href="{{ url_for('accounts.add_account') }}" class="btn btn-primary">+ Add Account</a>
+    </div>
+    
+    {% if accounts %}
     <table>
         <thead>
             <tr>
                 <th>ID</th>
                 <th>Account Name</th>
                 <th>Type</th>
+                <th style="text-align: right;">Balance</th>
                 <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for account in accounts %}
+            {% if account.account_type == 'asset' %}
+            <tr style="background: rgba(26,86,219,0.05);">
+                <td>{{ account.id }}</td>
+                <td>{{ account.name }}</td>
+                <td><span class="badge" style="background: rgba(26,86,219,0.1); color: var(--blue);">{{ account.account_type }}</span></td>
+                <td class="amount">{{ balances.get(account.id, 0)|format_inr }}</td>
+                <td><a href="{{ url_for('accounts.ledger', account_id=account.id) }}" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">View</a></td>
+            </tr>
+            {% elif account.account_type == 'liability' %}
+            <tr style="background: rgba(239,68,68,0.05);">
+                <td>{{ account.id }}</td>
+                <td>{{ account.name }}</td>
+                <td><span class="badge s-overdue">{{ account.account_type }}</span></td>
+                <td class="amount">{{ balances.get(account.id, 0)|format_inr }}</td>
+                <td><a href="{{ url_for('accounts.ledger', account_id=account.id) }}" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">View</a></td>
+            </tr>
+            {% elif account.account_type == 'income' %}
+            <tr style="background: rgba(12,166,120,0.05);">
+                <td>{{ account.id }}</td>
+                <td>{{ account.name }}</td>
+                <td><span class="badge paid">{{ account.account_type }}</span></td>
+                <td class="amount">{{ balances.get(account.id, 0)|format_inr }}</td>
+                <td><a href="{{ url_for('accounts.ledger', account_id=account.id) }}" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">View</a></td>
+            </tr>
+            {% else %}
             <tr>
                 <td>{{ account.id }}</td>
                 <td>{{ account.name }}</td>
-                <td>{{ account.account_type }}</td>
-                <td>
-                    <a href="{{ url_for('accounts.delete_account', id=account.id) }}" class="btn btn-danger">Delete</a>
-                </td>
+                <td><span class="badge pending">{{ account.account_type }}</span></td>
+                <td class="amount">{{ balances.get(account.id, 0)|format_inr }}</td>
+                <td><a href="{{ url_for('accounts.ledger', account_id=account.id) }}" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">View</a></td>
             </tr>
+            {% endif %}
             {% endfor %}
         </tbody>
     </table>
+    {% else %}
+    <div class="empty-state">
+        <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        <h3>No accounts yet</h3>
+        <p>Add your first account to get started</p>
+        <a href="{{ url_for('accounts.add_account') }}" class="btn btn-primary">Add First Account</a>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

@@ -10,6 +10,20 @@ from flask_limiter.util import get_remote_address
 from ext import db
 from config import config
 
+def format_inr(value):
+    """Format number as Indian INR (Lakh/Crore): 1845000 → ₹18.45L"""
+    if value is None:
+        return '₹0'
+    value = float(value)
+    if value >= 10000000:
+        return f'₹{value/10000000:.2f}Cr'
+    elif value >= 100000:
+        return f'₹{value/100000:.2f}L'
+    elif value >= 1000:
+        return f'₹{value/1000:.1f}K'
+    else:
+        return f'₹{value:.0f}'
+
 def create_app(config_name=None):
     if config_name is None:
         config_name = os.environ.get('FLASK_ENV', 'development')
@@ -22,6 +36,9 @@ def create_app(config_name=None):
     app.config.from_object(cfg)
     if hasattr(cfg, 'init_app'):
         cfg.init_app(app)
+    
+    # Register custom Jinja2 filter
+    app.jinja_env.filters['format_inr'] = format_inr
     
     csrf = CSRFProtect(app)
     db.init_app(app)

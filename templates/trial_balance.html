@@ -1,44 +1,60 @@
 {% extends "base.html" %}
-{% block title %}Trial Balance{% endblock %}
+{% block page_title %}Trial Balance{% endblock %}
+
 {% block content %}
 <div class="card">
-    <h2>Trial Balance</h2>
-    <p style="color: #666; margin-bottom: 15px;">As of: {{ as_of_date }}</p>
-    <form method="get" style="margin-bottom: 20px;">
-        <label>As of Date: </label>
-        <input type="date" name="date" value="{{ as_of_date }}">
-        <button type="submit" class="btn">Generate</button>
-    </form>
+    <div class="card-header">
+        <div class="card-title">Trial Balance</div>
+        <form method="get" style="display: flex; gap: 8px; align-items: center;">
+            <label style="font-size: 12px; margin: 0;">As of:</label>
+            <input type="date" name="date" value="{{ as_of_date }}" style="padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px;">
+            <button type="submit" class="btn btn-secondary" style="padding: 6px 12px;">Generate</button>
+        </form>
+    </div>
+    
+    {% if data %}
     <table>
         <thead>
             <tr>
                 <th>Account</th>
                 <th>Type</th>
-                <th>Debit (₹)</th>
-                <th>Credit (₹)</th>
+                <th style="text-align: right;">Debit</th>
+                <th style="text-align: right;">Credit</th>
             </tr>
         </thead>
         <tbody>
             {% for row in data %}
             <tr>
-                <td>{{ row.account }}</td>
+                <td style="font-weight: 500;">{{ row.account }}</td>
                 <td>{{ row.account_type }}</td>
-                <td>{{ "%.2f"|format(row.debit) if row.debit > 0 else '-' }}</td>
-                <td>{{ "%.2f"|format(row.credit) if row.credit > 0 else '-' }}</td>
+                <td class="amount">{{ "%.2f"|format(row.debit) if row.debit > 0 else '-' }}</td>
+                <td class="amount">{{ "%.2f"|format(row.credit) if row.credit > 0 else '-' }}</td>
             </tr>
             {% endfor %}
-            <tr style="font-weight: bold; background: #f5f5f5;">
+            <tr style="font-weight: 600; background: rgba(26,86,219,0.1);">
                 <td colspan="2">Total</td>
-                <td>₹{{ "%.2f"|format(total_dr) }}</td>
-                <td>₹{{ "%.2f"|format(total_cr) }}</td>
+                <td class="amount">{{ total_dr|format_inr }}</td>
+                <td class="amount">{{ total_cr|format_inr }}</td>
             </tr>
         </tbody>
     </table>
+    
     {% if is_balanced %}
-    <p style="color: green; margin-top: 10px;">✓ Trial Balance is balanced</p>
+    <div style="margin-top: 16px; padding: 12px; background: rgba(12,166,120,0.1); border-radius: 6px; color: var(--teal);">
+        ✓ Trial Balance is balanced
+    </div>
     {% else %}
-    <p style="color: red; margin-top: 10px;">⚠ Trial Balance is NOT balanced!</p>
+    <div style="margin-top: 16px; padding: 12px; background: rgba(239,68,68,0.1); border-radius: 6px; color: var(--red);">
+        ⚠ Trial Balance is NOT balanced!
+    </div>
     {% endif %}
-    <a href="{{ url_for('reports.index') }}" class="btn" style="margin-top: 15px;">Back to Reports</a>
+    {% else %}
+    <div class="empty-state">
+        <h3>No data</h3>
+        <p>No transactions to display</p>
+    </div>
+    {% endif %}
+    
+    <a href="{{ url_for('reports.index') }}" class="btn btn-secondary" style="margin-top: 16px;">Back to Reports</a>
 </div>
 {% endblock %}

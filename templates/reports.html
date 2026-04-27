@@ -1,15 +1,37 @@
 {% extends "base.html" %}
-{% block title %}Reports{% endblock %}
+{% block page_title %}Reports{% endblock %}
+
 {% block content %}
 <div class="card">
-    <h2>Financial Reports</h2>
-    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-        <a href="{{ url_for('reports.trial_balance') }}" class="btn">Trial Balance</a>
-        <a href="{{ url_for('reports.profit_loss') }}" class="btn">Profit & Loss</a>
-        <a href="{{ url_for('reports.balance_sheet') }}" class="btn">Balance Sheet</a>
-        <a href="{{ url_for('reports.gst_report') }}" class="btn">GST Report</a>
-        <a href="{{ url_for('reports.payroll_summary') }}" class="btn">Payroll Summary</a>
-        <a href="{{ url_for('reports.aging_report') }}" class="btn">AR/AP Aging</a>
+    <div class="card-header">
+        <div class="card-title">Financial Reports</div>
+    </div>
+    
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+        <a href="{{ url_for('reports.trial_balance') }}" class="btn btn-secondary" style="padding: 20px; text-align: center;">
+            <div style="font-size: 14px; font-weight: 500;">Trial Balance</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Debits = Credits</div>
+        </a>
+        <a href="{{ url_for('reports.profit_loss') }}" class="btn btn-secondary" style="padding: 20px; text-align: center;">
+            <div style="font-size: 14px; font-weight: 500;">Profit & Loss</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Income - Expenses</div>
+        </a>
+        <a href="{{ url_for('reports.balance_sheet') }}" class="btn btn-secondary" style="padding: 20px; text-align: center;">
+            <div style="font-size: 14px; font-weight: 500;">Balance Sheet</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Assets = Liabilities + Capital</div>
+        </a>
+        <a href="{{ url_for('reports.gst_report') }}" class="btn btn-secondary" style="padding: 20px; text-align: center;">
+            <div style="font-size: 14px; font-weight: 500;">GST Report</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">CGST/SGST/IGST</div>
+        </a>
+        <a href="{{ url_for('reports.payroll_summary') }}" class="btn btn-secondary" style="padding: 20px; text-align: center;">
+            <div style="font-size: 14px; font-weight: 500;">Payroll Summary</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Salary Records</div>
+        </a>
+        <a href="{{ url_for('reports.aging_report') }}" class="btn btn-secondary" style="padding: 20px; text-align: center;">
+            <div style="font-size: 14px; font-weight: 500;">AR/AP Aging</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Receivables Age</div>
+        </a>
     </div>
 </div>
 {% endblock %}
