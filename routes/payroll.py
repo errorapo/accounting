@@ -9,6 +9,50 @@ from validators import parse_non_negative_float
 
 bp = Blueprint('payroll', __name__)
 
+
+def compute_tds_on_salary(annual_gross):
+    """Estimate TDS under Section 192 using basic income tax slabs (FY 2025-26 new regime).
+
+    New regime slabs (no deductions):
+        0 - 3,00,000      : Nil
+        3,00,001 - 7,00,000  : 5%
+        7,00,001 - 10,00,000 : 10%
+        10,00,001 - 12,00,000: 15%
+        12,00,001 - 15,00,000: 20%
+        Above 15,00,000   : 30%
+
+    Returns: estimated annual TDS (Decimal), monthly TDS (Decimal)
+    """
+    from decimal import Decimal
+    g = Decimal(str(annual_gross))
+    tax = Decimal('0')
+
+    slabs = [
+        (Decimal('300000'),  Decimal('0')),
+        (Decimal('400000'),  Decimal('0.05')),
+        (Decimal('300000'),  Decimal('0.10')),
+        (Decimal('200000'),  Decimal('0.15')),
+        (Decimal('300000'),  Decimal('0.20')),
+        (None,               Decimal('0.30')),
+    ]
+
+    remaining = g
+    for slab_size, rate in slabs:
+        if remaining <= 0:
+            break
+        if slab_size is None:
+            taxable = remaining
+        else:
+            taxable = min(remaining, slab_size)
+        tax += taxable * rate
+        remaining -= taxable
+
+    tax = tax + tax * Decimal('0.04')
+
+    monthly_tds = (tax / Decimal('12')).quantize(Decimal('0.01'))
+    return tax, monthly_tds
+
+
 @bp.route('/employees')
 @login_required
 def employees():
@@ -83,6 +127,11 @@ def create_payroll():
         except ValueError as e:
             flash(str(e), 'error')
             return render_template('create_payroll.html', employees=employees)
+
+        if tax_deduction == 0:
+            annual_gross = float(gross_salary) * 12
+            _, monthly_tds = compute_tds_on_salary(annual_gross)
+            tax_deduction = float(monthly_tds)
 
         # Convert all to Decimal for safe arithmetic with Numeric columns
         base = employee.base_salary
@@ -279,15 +328,18 @@ def generate_payroll():
         overtime_amount = total_overtime * emp.hourly_rate * 1.5
         
         gross = base + overtime_amount + emp.transport_allowance + emp.food_allowance + emp.housing_allowance
-        
+
         from decimal import Decimal
         PF_WAGE_CEILING = Decimal('15000')
         pf_base = min(Decimal(str(base)), PF_WAGE_CEILING)
         pf_employee = (pf_base * Decimal(str(emp.pf_rate))) / Decimal('100')
         pf_employer = pf_employee
-        total_deductions = pf_employee
+
+        _, monthly_tds = compute_tds_on_salary(float(gross) * 12)
+        tax_dec = monthly_tds
+        total_deductions = pf_employee + tax_dec
         net = gross - total_deductions
-        
+
         payroll = Payroll(
             employee_id=emp.id,
             month=month,
@@ -302,7 +354,7 @@ def generate_payroll():
             gross_salary=gross,
             pf_employee=pf_employee,
             pf_employer=pf_employer,
-            tax_deduction=0,
+            tax_deduction=tax_dec,
             insurance=0,
             total_deductions=total_deductions,
             net_salary=net,
@@ -312,7 +364,7 @@ def generate_payroll():
         db.session.flush()
 
         from accounting_engine import record_salary_payment
-        record_salary_payment(today, emp.name, gross, pf_employee, pf_employer, 0, f"Monthly {month}")
+        record_salary_payment(today, emp.name, gross, pf_employee, pf_employer, tax_dec, f"Monthly {month}")
 
         created_count += 1
 

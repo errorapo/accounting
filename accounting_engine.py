@@ -32,8 +32,10 @@ DEFAULT_ACCOUNTS = [
     ('IGST Receivable', 'asset'),
     ('Accounts Payable', 'liability'),
     ('Loans Payable', 'liability'),
+    ('Royalty Payable', 'liability'),
     ('PF Payable', 'liability'),
     ('TDS Payable', 'liability'),
+    ('Professional Tax Payable', 'liability'),
     ('GST Payable', 'liability'),
     ('CGST Payable', 'liability'),
     ('SGST Payable', 'liability'),
@@ -53,6 +55,8 @@ DEFAULT_ACCOUNTS = [
     ('Office Expenses', 'expense'),
     ('Interest Expense', 'expense'),
     ('Depreciation Expense', 'expense'),
+    ('Royalty Expense', 'expense'),
+    ('Professional Tax Expense', 'expense'),
 ]
 
 def get_or_create_account(name, account_type):
@@ -866,6 +870,45 @@ def record_gst_payment(date, amount, payment_mode='bank', notes='', gst_type='al
         'gst_type': gst_type,
         'notes': notes,
         'description': desc
+    }
+
+def record_royalty_payment(date, amount, quantity, stone_type, payment_mode='bank', description='Royalty Payment'):
+    """Record royalty payment to state government under MMDR Act.
+
+    Journal Entry:
+        Dr Royalty Expense
+        Cr Royalty Payable   (accrual)
+
+        Dr Royalty Payable
+        Cr Bank/Cash         (payment)
+    """
+    if isinstance(date, str):
+        date = datetime.strptime(date, '%Y-%m-%d').date()
+
+    if amount <= 0:
+        raise ValueError("Amount must be positive")
+
+    royalty_expense = get_or_create_account('Royalty Expense', 'expense')
+    royalty_payable = get_or_create_account('Royalty Payable', 'liability')
+
+    if payment_mode == 'cash':
+        credit_account = get_or_create_account('Cash', 'asset')
+    else:
+        credit_account = get_or_create_account('Bank', 'asset')
+
+    desc_accrual = f"Royalty Accrual - {stone_type} - {quantity} tons - {description}"
+    create_journal_entry(date, desc_accrual, royalty_expense.id, royalty_payable.id, amount)
+
+    desc_payment = f"Royalty Payment - {stone_type} - {description}"
+    create_journal_entry(date, desc_payment, royalty_payable.id, credit_account.id, amount)
+
+    return {
+        'type': 'royalty_payment',
+        'amount': amount,
+        'quantity': quantity,
+        'stone_type': stone_type,
+        'payment_mode': payment_mode,
+        'description': desc_payment
     }
 
 def run_monthly_depreciation(as_of_date=None):

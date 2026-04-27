@@ -293,3 +293,40 @@ def test_pf_ceiling_applied_in_generate_payroll(app_context):
 
         assert pf_employee == Decimal('1800'), \
             f"PF in generate_payroll should be capped at 1800, got {pf_employee}"
+
+
+def test_tds_auto_computed_when_zero_entered(app_context):
+    """If tax_deduction=0, TDS is auto-computed from Section 192 slabs."""
+    with app_context.app_context():
+        from routes.payroll import compute_tds_on_salary
+        from decimal import Decimal
+
+        annual_gross = Decimal('600000')
+        annual_tds, monthly_tds = compute_tds_on_salary(annual_gross)
+
+        assert annual_tds == Decimal('15600'), \
+            f"Annual TDS should be 15600, got {annual_tds}"
+        assert monthly_tds == Decimal('1300.00'), \
+            f"Monthly TDS should be 1300, got {monthly_tds}"
+
+
+def test_tds_nil_below_threshold(app_context):
+    """No TDS for annual income below 3,00,000."""
+    with app_context.app_context():
+        from routes.payroll import compute_tds_on_salary
+        from decimal import Decimal
+
+        annual_tds, monthly_tds = compute_tds_on_salary(Decimal('280000'))
+        assert annual_tds == Decimal('0'), "No TDS below 3L threshold"
+        assert monthly_tds == Decimal('0.00'), "Monthly TDS should be 0"
+
+
+def test_tds_higher_slab(app_context):
+    """TDS computed correctly for income crossing multiple slabs."""
+    with app_context.app_context():
+        from routes.payroll import compute_tds_on_salary
+        from decimal import Decimal
+
+        annual_tds, monthly_tds = compute_tds_on_salary(Decimal('1200000'))
+        assert annual_tds == Decimal('83200'), \
+            f"Annual TDS should be 83200, got {annual_tds}"

@@ -292,6 +292,85 @@ def test_monthly_revenue_no_crash_in_january(app_context):
             result = get_monthly_revenue_expense(months=6)
         assert len(result['labels']) == 6
         assert len(result['revenue']) == 6
+
+
+def test_record_sale_inter_state_uses_igst(app_context):
+    """Inter-state sale posts IGST only — no CGST/SGST split."""
+    from decimal import Decimal
+
+    with app_context.app_context():
+        from accounting_engine import record_sale, get_or_create_account, get_account_balance
+        from models import Account
+
+        amount = Decimal('10000')
+        gst = Decimal('1800')
+
+        record_sale(date.today(), 'Out-State Customer', amount, gst,
+                    payment_type='cash', supply_type='inter')
+
+        igst_acc = Account.query.filter_by(name='IGST Payable').first()
+        cgst_acc = Account.query.filter_by(name='CGST Payable').first()
+        sgst_acc = Account.query.filter_by(name='SGST Payable').first()
+
+        assert get_account_balance(igst_acc.id) == gst, \
+            f"IGST Payable should be {gst}"
+        assert get_account_balance(cgst_acc.id) == Decimal('0'), \
+            "CGST Payable should be 0 for inter-state sale"
+        assert get_account_balance(sgst_acc.id) == Decimal('0'), \
+            "SGST Payable should be 0 for inter-state sale"
+
+
+def test_record_purchase_inter_state_itc_uses_igst(app_context):
+    """Inter-state purchase with ITC posts IGST receivable only — no CGST/SGST."""
+    from decimal import Decimal
+
+    with app_context.app_context():
+        from accounting_engine import record_purchase, get_account_balance
+        from models import Account
+
+        amount = Decimal('5000')
+        gst = Decimal('900')
+
+        record_purchase(date.today(), 'Out-State Vendor', amount, gst,
+                        itc_eligible=True, payment_type='cash', supply_type='inter')
+
+        igst_rec = Account.query.filter_by(name='IGST Receivable').first()
+        cgst_rec = Account.query.filter_by(name='CGST Receivable').first()
+        sgst_rec = Account.query.filter_by(name='SGST Receivable').first()
+
+        assert get_account_balance(igst_rec.id) == gst, \
+            f"IGST Receivable should be {gst}"
+        assert get_account_balance(cgst_rec.id) == Decimal('0'), \
+            "CGST Receivable should be 0 for inter-state purchase"
+        assert get_account_balance(sgst_rec.id) == Decimal('0'), \
+            "SGST Receivable should be 0 for inter-state purchase"
+
+
+def test_record_purchase_non_itc_adds_gst_to_expense(app_context):
+    """Non-ITC purchase includes GST in the expense amount, no ITC receivable posted."""
+    from decimal import Decimal
+
+    with app_context.app_context():
+        from accounting_engine import record_purchase, get_account_balance
+        from models import Account
+
+        amount = Decimal('2000')
+        gst = Decimal('360')
+        total = amount + gst
+
+        record_purchase(date.today(), 'Local Vendor', amount, gst,
+                        itc_eligible=False, payment_type='cash', supply_type='intra')
+
+        purchases_acc = Account.query.filter_by(name='Purchases').first()
+        cgst_rec = Account.query.filter_by(name='CGST Receivable').first()
+        sgst_rec = Account.query.filter_by(name='SGST Receivable').first()
+
+        assert get_account_balance(purchases_acc.id) == total, \
+            f"Non-ITC purchase expense should include GST: expected {total}"
+        assert get_account_balance(cgst_rec.id) == Decimal('0'), \
+            "No CGST Receivable for non-ITC purchase"
+        assert get_account_balance(sgst_rec.id) == Decimal('0'), \
+            "No SGST Receivable for non-ITC purchase"
     """get_monthly_revenue_expense must not crash in any month."""
     with app_context.app_context():
         from accounting_engine import get_monthly_revenue_expense
