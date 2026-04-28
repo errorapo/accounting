@@ -11,44 +11,43 @@ bp = Blueprint('payroll', __name__)
 
 
 def compute_tds_on_salary(annual_gross):
-    """Estimate TDS under Section 192 using basic income tax slabs (FY 2025-26 new regime).
+    """Estimate TDS under Section 192 using FY 2025-26 new regime slabs.
 
-    New regime slabs (no deductions):
-        0 - 3,00,000      : Nil
-        3,00,001 - 7,00,000  : 5%
-        7,00,001 - 10,00,000 : 10%
+    FY 2025-26 New regime slabs:
+        0 - 4,00,000         : Nil (Section 87A rebate)
+        4,00,001 - 7,00,000 : 5%
+        7,00,001 - 10,00,000: 10%
         10,00,001 - 12,00,000: 15%
         12,00,001 - 15,00,000: 20%
-        Above 15,00,000   : 30%
+        Above 15,00,000      : 30%
+    + 4% Health & Education Cess on tax.
+    Section 87A rebate: tax fully rebated for income <= 12,00,000.
 
     Returns: estimated annual TDS (Decimal), monthly TDS (Decimal)
     """
-    from decimal import Decimal
     g = Decimal(str(annual_gross))
     tax = Decimal('0')
 
-    slabs = [
-        (Decimal('300000'),  Decimal('0')),
-        (Decimal('400000'),  Decimal('0.05')),
-        (Decimal('300000'),  Decimal('0.10')),
-        (Decimal('200000'),  Decimal('0.15')),
-        (Decimal('300000'),  Decimal('0.20')),
-        (None,               Decimal('0.30')),
-    ]
-
-    remaining = g
-    for slab_size, rate in slabs:
-        if remaining <= 0:
-            break
-        if slab_size is None:
-            taxable = remaining
-        else:
-            taxable = min(remaining, slab_size)
-        tax += taxable * rate
-        remaining -= taxable
+    if g > Decimal('1200000'):
+        remaining = g - Decimal('1200000')
+        slabs = [
+            (Decimal('200000'), Decimal('0.05')),
+            (Decimal('300000'), Decimal('0.10')),
+            (Decimal('200000'), Decimal('0.15')),
+            (Decimal('300000'), Decimal('0.20')),
+            (None,               Decimal('0.30')),
+        ]
+        tax = Decimal('0')
+        for slab_size, rate in slabs:
+            if remaining <= 0:
+                break
+            taxable = min(remaining, slab_size) if slab_size else remaining
+            tax += taxable * rate
+            remaining -= taxable
+    else:
+        tax = Decimal('0')
 
     tax = tax + tax * Decimal('0.04')
-
     monthly_tds = (tax / Decimal('12')).quantize(Decimal('0.01'))
     return tax, monthly_tds
 
@@ -117,7 +116,7 @@ def create_payroll():
     if request.method == 'POST':
         from datetime import date
         employee_id = int(request.form.get('employee_id'))
-        employee = Employee.query.get(employee_id)
+        employee = db.session.get(Employee, employee_id)
         
         try:
             overtime_hours = parse_non_negative_float(request.form.get('overtime_hours', 0), 'Overtime hours')
@@ -312,24 +311,23 @@ def generate_payroll():
         if not attendance_records:
             continue
         
-        days_present = 0
-        total_overtime = 0.0
+        days_present = Decimal('0')
+        total_overtime = Decimal('0')
 
         for att in attendance_records:
             if att.half_day:
-                days_present += 0.5  # Half day = 0.5
+                days_present += Decimal('0.5')
             else:
-                days_present += 1
-            total_overtime += att.overtime_hours or 0
+                days_present += Decimal('1')
+            total_overtime += Decimal(str(att.overtime_hours or 0))
 
-        daily_rate = emp.base_salary / 26  # Indian payroll uses 26 working days (excluding Sunday) as standard
+        daily_rate = emp.base_salary / 26
         base = days_present * daily_rate
-        
-        overtime_amount = total_overtime * emp.hourly_rate * 1.5
-        
+
+        overtime_amount = total_overtime * emp.hourly_rate * Decimal('1.5')
+
         gross = base + overtime_amount + emp.transport_allowance + emp.food_allowance + emp.housing_allowance
 
-        from decimal import Decimal
         PF_WAGE_CEILING = Decimal('15000')
         pf_base = min(Decimal(str(base)), PF_WAGE_CEILING)
         pf_employee = (pf_base * Decimal(str(emp.pf_rate))) / Decimal('100')

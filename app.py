@@ -1,4 +1,8 @@
 import os
+import uuid
+import time
+import logging
+from logging.handlers import RotatingFileHandler
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -47,9 +51,27 @@ def create_app(config_name=None):
         get_remote_address,
         app=app,
         default_limits=["200 per day", "50 per hour"],
-        storage_uri="memory://"
+        storage_uri=os.environ.get('REDIS_URL', 'memory://')
     )
-    
+
+    # Request ID + timing hooks
+    @app.before_request
+    def before_request():
+        g.start_time = time.time()
+        g.request_id = str(uuid.uuid4())[:8]
+
+    @app.after_request
+    def after_request(response):
+        if hasattr(g, 'start_time') and hasattr(g, 'request_id'):
+            duration_ms = int((time.time() - g.start_time) * 1000)
+            app.logger.info(
+                '%s %s %s %s %sms',
+                g.request_id, request.method, request.path,
+                response.status_code, duration_ms
+            )
+            response.headers['X-Request-ID'] = g.request_id
+        return response
+
     @app.after_request
     def add_security_headers(response):
         response.headers['X-Content-Type-Options'] = 'nosniff'
@@ -69,7 +91,39 @@ def create_app(config_name=None):
     app.register_blueprint(accounts.bp)
     app.register_blueprint(reports.bp)
     app.register_blueprint(vendor.bp)
-    
+
+    # Health check endpoints (no auth required, exempt from rate limiting)
+    @app.route('/health')
+    def health():
+        """Liveness probe — app is running."""
+        return {'status': 'ok'}, 200
+
+    @app.route('/ready')
+    def ready():
+        """Readiness probe — DB is reachable."""
+        try:
+            db.session.execute(db.text('SELECT 1'))
+        except Exception as e:
+            return {'status': 'error', 'reason': str(e)}, 503
+        return {'status': 'ready'}, 200
+
+    limiter.exempt(health)
+    limiter.exempt(ready)
+
+    # Production file logging (not in debug/testing)
+    if not app.debug and not app.testing:
+        os.makedirs('logs', exist_ok=True)
+        file_handler = RotatingFileHandler(
+            'logs/app.log', maxBytes=10*1024*1024, backupCount=5
+        )
+        file_handler.setFormatter(logging.Formatter(
+            '%(asctime)s %(levelname)s %(name)s — %(message)s'
+        ))
+        file_handler.setLevel(logging.INFO)
+        app.logger.addHandler(file_handler)
+        app.logger.setLevel(logging.INFO)
+        app.logger.propagate = False
+
     with app.app_context():
         db.create_all()
         if not skip_init:

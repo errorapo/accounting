@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash
 from routes.dashboard import login_required
 from ext import db
-from models import Account, Transaction, Payroll, Sales, Inventory
+from models import Account, Transaction, Payroll, Sales, Inventory, Customer, Vendor
 from sqlalchemy import func
 from datetime import datetime, date
 from accounting_engine import get_trial_balance, get_balance_sheet, get_income_statement, initialize_default_accounts
@@ -248,7 +248,7 @@ def aging_report():
     
     ar_items = []
     for sale in sales_credit:
-        customer = Customer.query.get(sale.customer_id) if sale.customer_id else None
+        customer = db.session.get(Customer, sale.customer_id) if sale.customer_id else None
         days_outstanding = (today - sale.invoice_date).days if sale.invoice_date else 0
         
         if days_outstanding <= 30:
@@ -276,7 +276,7 @@ def aging_report():
     
     ap_items = []
     for purchase in purchases_credit:
-        vendor = Vendor.query.get(purchase.vendor_id) if purchase.vendor_id else None
+        vendor = db.session.get(Vendor, purchase.vendor_id) if purchase.vendor_id else None
         days_outstanding = (today - purchase.invoice_date).days if purchase.invoice_date else 0
         
         if days_outstanding <= 30:

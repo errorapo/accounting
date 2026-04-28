@@ -95,7 +95,7 @@ def get_period_balance(account_id, start_date=None, end_date=None):
     total_debit = q.with_entities(func.sum(Transaction.debit)).scalar() or 0
     total_credit = q.with_entities(func.sum(Transaction.credit)).scalar() or 0
     
-    account = Account.query.get(account_id)
+    account = db.session.get(Account, account_id)
     account_type = account.account_type if account else 'asset'
     
     if account_type in ['asset', 'expense']:
@@ -107,6 +107,8 @@ def create_journal_entry(date, description, debit_account_id, credit_account_id,
     """Create a journal entry with debit and credit."""
     if amount <= 0:
         raise ValueError("Amount must be positive")
+    if debit_account_id == credit_account_id:
+        raise ValueError("Debit and credit accounts must be different")
 
     journal = JournalEntry(
         date=date,
@@ -187,7 +189,7 @@ def reverse_journal_entry(entry_id, reversal_date=None, reversal_reason=""):
     In accounting, posted entries cannot be edited or deleted - they must be reversed.
     This creates a reversal entry with opposite debit/credit accounts.
     """
-    original = JournalEntry.query.get(entry_id)
+    original = db.session.get(JournalEntry, entry_id)
     if not original:
         raise ValueError(f"Journal entry {entry_id} not found")
     
@@ -264,7 +266,7 @@ def get_account_balance(account_id, as_of_date=None):
         Transaction.date <= (as_of_date or datetime.now().date())
     ).scalar() or 0
 
-    account = Account.query.get(account_id)
+    account = db.session.get(Account, account_id)
     account_type = account.account_type if account else 'asset'
     
     if account_type in ['asset', 'expense']:
@@ -969,6 +971,112 @@ def run_monthly_depreciation(as_of_date=None):
         'month': month_key,
         'errors': errors
     }
+
+
+def run_block_depreciation(as_of_date=None, block_rate=15):
+    """Run block depreciation (WDV method) for tax purposes.
+    
+    India Income Tax: Block of assets depreciated at WDV rates:
+    - Buildings: 10%
+    - Plant & Machinery: 15%
+    - Furniture: 10%
+    - Vehicles: 20%
+    - Computers: 40%
+    
+    Args:
+        as_of_date: Date for depreciation calculation
+        block_rate: Default WDV rate (15% for plant/machinery)
+    
+    Returns:
+        dict with assets_processed, total_depreciation, month
+    """
+    from datetime import date
+    from models import FixedAsset
+    
+    if as_of_date is None:
+        as_of_date = date.today()
+    
+    month_key = f"{as_of_date.year}-{as_of_date.month:02d}"
+    
+    dep_expense = get_or_create_account('Depreciation Expense', 'expense')
+    accum_dep = get_or_create_account('Accumulated Depreciation', 'asset')
+    
+    assets = FixedAsset.query.filter_by(is_active=True).all()
+    
+    processed = []
+    total_dep = 0
+    errors = []
+    
+    WDV_RATES = {
+        'building': 10,
+        'plant': 15,
+        'machinery': 15,
+        'furniture': 10,
+        'vehicle': 20,
+        'computer': 40,
+        'straight_line': 0
+    }
+    
+    for asset in assets:
+        existing = JournalEntry.query.filter(
+            JournalEntry.description.like(f"Block Depreciation - {asset.name}%")
+        ).all()
+        if any(month_key in (je.description or '') for je in existing):
+            continue
+        
+        rate = WDV_RATES.get(asset.depreciation_method.lower().replace(' ', '_'), block_rate)
+        
+        if rate == 0:
+            continue
+        
+        wdv = asset.cost - (asset.accumulated_depreciation or 0)
+        monthly_rate = rate / 12
+        monthly_dep = wdv * Decimal(str(monthly_rate)) / 100
+        
+        if monthly_dep <= 0:
+            errors.append(f"{asset.name}: No WDV remaining for depreciation")
+            continue
+        
+        desc = f"Block Depreciation - {asset.name} - {month_key} ({rate}% WDV)"
+        create_journal_entry(as_of_date, desc, dep_expense.id, accum_dep.id, monthly_dep)
+        
+        asset.accumulated_depreciation = (asset.accumulated_depreciation or 0) + monthly_dep
+        
+        processed.append({
+            'name': asset.name,
+            'rate': rate,
+            'depreciation': float(monthly_dep),
+            'method': 'WDV'
+        })
+        total_dep += monthly_dep
+    
+    return {
+        'assets_processed': processed,
+        'total_depreciation': float(total_dep),
+        'month': month_key,
+        'method': 'WDV (Written Down Value)',
+        'errors': errors
+    }
+
+
+def log_audit(db_session, user_id, action, table_name, record_id, old_values=None, new_values=None, ip_address=None):
+    """Log an audit entry for a database change."""
+    from models import AuditLog
+    import json
+    
+    audit = AuditLog(
+        user_id=user_id,
+        action=action,
+        table_name=table_name,
+        record_id=record_id,
+        old_values=json.dumps(old_values) if old_values else None,
+        new_values=json.dumps(new_values) if new_values else None,
+        ip_address=ip_address
+    )
+    db_session.add(audit)
+    db_session.commit()
+    return audit
+
 
 def get_monthly_revenue_expense(months=6):
     """Get monthly revenue and expense data for charts.

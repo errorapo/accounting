@@ -4,7 +4,6 @@ import os
 import sys
 import pytest
 
-# Set environment BEFORE imports
 os.environ['REDIS_URL'] = 'memory://'
 os.environ['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
 os.environ['SKIP_INIT_DEFAULT_DATA'] = 'true'
@@ -21,13 +20,16 @@ def app_context():
     app = create_app('development')
     app.config['TESTING'] = True
     app.config['WTF_CSRF_ENABLED'] = False
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
     
     with app.app_context():
         db.drop_all()
         db.create_all()
         init_default_data()
         yield app
+        db.session.rollback()
         db.drop_all()
+        db.session.close()
 
 
 @pytest.fixture

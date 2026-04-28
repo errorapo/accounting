@@ -24,13 +24,16 @@ def app_context():
     app = create_app('development')
     app.config['TESTING'] = True
     app.config['WTF_CSRF_ENABLED'] = False
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
     
     with app.app_context():
         db.drop_all()
         db.create_all()
         init_default_data()
         yield app
+        db.session.rollback()
         db.drop_all()
+        db.session.close()
 
 
 def test_pf_calculated_on_base_only(app_context):
@@ -296,7 +299,7 @@ def test_pf_ceiling_applied_in_generate_payroll(app_context):
 
 
 def test_tds_auto_computed_when_zero_entered(app_context):
-    """If tax_deduction=0, TDS is auto-computed from Section 192 slabs."""
+    """If tax_deduction=0, TDS is auto-computed from FY26 new regime slabs."""
     with app_context.app_context():
         from routes.payroll import compute_tds_on_salary
         from decimal import Decimal
@@ -304,29 +307,34 @@ def test_tds_auto_computed_when_zero_entered(app_context):
         annual_gross = Decimal('600000')
         annual_tds, monthly_tds = compute_tds_on_salary(annual_gross)
 
-        assert annual_tds == Decimal('15600'), \
-            f"Annual TDS should be 15600, got {annual_tds}"
-        assert monthly_tds == Decimal('1300.00'), \
-            f"Monthly TDS should be 1300, got {monthly_tds}"
+        assert annual_tds == Decimal('0'), \
+            f"Annual TDS should be 0 (87A rebate for <=12L), got {annual_tds}"
+        assert monthly_tds == Decimal('0.00'), \
+            f"Monthly TDS should be 0, got {monthly_tds}"
 
 
 def test_tds_nil_below_threshold(app_context):
-    """No TDS for annual income below 3,00,000."""
+    """No TDS for annual income below 12L (Section 87A rebate)."""
     with app_context.app_context():
         from routes.payroll import compute_tds_on_salary
         from decimal import Decimal
 
         annual_tds, monthly_tds = compute_tds_on_salary(Decimal('280000'))
-        assert annual_tds == Decimal('0'), "No TDS below 3L threshold"
+        assert annual_tds == Decimal('0'), "No TDS below 12L threshold"
         assert monthly_tds == Decimal('0.00'), "Monthly TDS should be 0"
 
 
 def test_tds_higher_slab(app_context):
-    """TDS computed correctly for income crossing multiple slabs."""
+    """TDS computed correctly for income crossing 12L rebate threshold."""
     with app_context.app_context():
         from routes.payroll import compute_tds_on_salary
         from decimal import Decimal
 
-        annual_tds, monthly_tds = compute_tds_on_salary(Decimal('1200000'))
-        assert annual_tds == Decimal('83200'), \
-            f"Annual TDS should be 83200, got {annual_tds}"
+        # 15,00,000 annual: excess over 12L = 3L
+        # 2L @ 5% = 10,000; 1L @ 10% = 10,000; tax = 20,000
+        # + 4% cess = 20,800
+        annual_tds, monthly_tds = compute_tds_on_salary(Decimal('1500000'))
+        assert annual_tds == Decimal('20800'), \
+            f"Annual TDS should be 20800 (2L@5%+1L@10%+4%cess), got {annual_tds}"
+        assert monthly_tds == Decimal('1733.33'), \
+            f"Monthly TDS should be 1733.33, got {monthly_tds}"

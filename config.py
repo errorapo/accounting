@@ -1,4 +1,6 @@
 import os
+import signal
+import sys
 from datetime import timedelta
 from dotenv import load_dotenv
 
@@ -38,6 +40,10 @@ class ProductionConfig(Config):
         if not db_url:
             raise ValueError("DATABASE_URL must be set in production environment")
 
+        redis_url = os.environ.get('REDIS_URL')
+        if not redis_url:
+            raise ValueError("REDIS_URL must be set in production environment")
+
         admin_pass = os.environ.get('ADMIN_PASSWORD', '')
         accountant_pass = os.environ.get('ACCOUNTANT_PASSWORD', '')
 
@@ -45,6 +51,12 @@ class ProductionConfig(Config):
             raise ValueError("ADMIN_PASSWORD is weak or default — set a strong password in .env")
         if accountant_pass in ('', 'accountant123', 'accountant', 'password'):
             raise ValueError("ACCOUNTANT_PASSWORD is weak or default — set a strong password in .env")
+
+        # Graceful shutdown on SIGTERM
+        def graceful_shutdown(signum, frame):
+            app.logger.info('Received SIGTERM — shutting down gracefully')
+            sys.exit(0)
+        signal.signal(signal.SIGTERM, graceful_shutdown)
 
 class TestingConfig(Config):
     TESTING = True

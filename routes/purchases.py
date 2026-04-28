@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from routes.dashboard import login_required
 from routes.auth_utils import admin_required
 from ext import db
-from models import Purchase, Inventory, Account, PurchasePayment, InvoiceSequence
+from models import Purchase, Inventory, Account, PurchasePayment, InvoiceSequence, Vendor
 from datetime import datetime, date
 from decimal import Decimal
 from accounting_engine import record_purchase, record_purchase_payment, create_journal_entry, get_or_create_account
@@ -55,7 +55,7 @@ def create_purchase():
         itc_eligible = request.form.get('itc_eligible') == '1'
 
         if vendor_id:
-            vendor = Vendor.query.get(vendor_id)
+            vendor = db.session.get(Vendor, vendor_id)
             if vendor:
                 vendor_name = vendor.name
         elif not vendor_name:

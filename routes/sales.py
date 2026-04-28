@@ -221,7 +221,7 @@ def add_payment(id):
 
         record_payment(date.today(), sale.id, amount, payment_mode, notes, f"Payment: {sale.invoice_number}")
 
-        if total_paid + Decimal(str(amount)) >= sale.total_amount - 0.01:
+        if total_paid + Decimal(str(amount)) >= sale.total_amount - Decimal('0.01'):
             sale.payment_status = 'paid'
 
         db.session.commit()
