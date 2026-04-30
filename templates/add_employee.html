@@ -65,6 +65,21 @@
             </div>
         </div>
         
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">State (for Professional Tax)</label>
+                <select name="state" class="form-input">
+                    <option value="Maharashtra">Maharashtra</option>
+                    <option value="Karnataka">Karnataka</option>
+                    <option value="Gujarat">Gujarat</option>
+                    <option value="Tamil Nadu">Tamil Nadu</option>
+                    <option value="Telangana">Telangana</option>
+                    <option value="Delhi">Delhi</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+        </div>
+        
         <div style="margin-top: 24px; display: flex; gap: 12px;">
             <button type="submit" class="btn btn-primary">Add Employee</button>
             <a href="{{ url_for('payroll.employees') }}" class="btn btn-secondary">Cancel</a>

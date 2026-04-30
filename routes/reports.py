@@ -89,7 +89,7 @@ def balance_sheet():
 @login_required
 def gst_report():
     from models import Purchase
-    from accounting_engine import get_account_balance, get_or_create_account
+    from accounting_engine import get_account_balance, get_or_create_account, get_period_balance
 
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
@@ -107,40 +107,20 @@ def gst_report():
         else:
             start_date = date(end_date.year - 1, 4, 1)
 
-    # Output GST (Sales)
-    output_cgst = db.session.query(func.sum(Sales.cgst_amount)).filter(
-        Sales.invoice_date >= start_date,
-        Sales.invoice_date <= end_date
-    ).scalar() or 0
-
-    output_sgst = db.session.query(func.sum(Sales.sgst_amount)).filter(
-        Sales.invoice_date >= start_date,
-        Sales.invoice_date <= end_date
-    ).scalar() or 0
-
-    output_igst = db.session.query(func.sum(Sales.igst_amount)).filter(
-        Sales.invoice_date >= start_date,
-        Sales.invoice_date <= end_date
-    ).scalar() or 0
-
-    # Input GST (Purchases) - ITC eligible
-    input_cgst = db.session.query(func.sum(Purchase.cgst_amount)).filter(
-        Purchase.invoice_date >= start_date,
-        Purchase.invoice_date <= end_date,
-        Purchase.itc_eligible == True
-    ).scalar() or 0
-
-    input_sgst = db.session.query(func.sum(Purchase.sgst_amount)).filter(
-        Purchase.invoice_date >= start_date,
-        Purchase.invoice_date <= end_date,
-        Purchase.itc_eligible == True
-    ).scalar() or 0
-
-    input_igst = db.session.query(func.sum(Purchase.igst_amount)).filter(
-        Purchase.invoice_date >= start_date,
-        Purchase.invoice_date <= end_date,
-        Purchase.itc_eligible == True
-    ).scalar() or 0
+    cgst_payable_acc = get_or_create_account('CGST Payable', 'liability')
+    sgst_payable_acc = get_or_create_account('SGST Payable', 'liability')
+    igst_payable_acc = get_or_create_account('IGST Payable', 'liability')
+    cgst_receivable_acc = get_or_create_account('CGST Receivable', 'asset')
+    sgst_receivable_acc = get_or_create_account('SGST Receivable', 'asset')
+    igst_receivable_acc = get_or_create_account('IGST Receivable', 'asset')
+    
+    output_cgst = get_period_balance(cgst_payable_acc.id, start_date, end_date)
+    output_sgst = get_period_balance(sgst_payable_acc.id, start_date, end_date)
+    output_igst = get_period_balance(igst_payable_acc.id, start_date, end_date)
+    
+    input_cgst = get_period_balance(cgst_receivable_acc.id, start_date, end_date)
+    input_sgst = get_period_balance(sgst_receivable_acc.id, start_date, end_date)
+    input_igst = get_period_balance(igst_receivable_acc.id, start_date, end_date)
 
     # Non-ITC purchases
     input_non_itc_cgst = db.session.query(func.sum(Purchase.cgst_amount)).filter(
@@ -213,17 +193,33 @@ def gst_pay():
     cgst_acc = get_or_create_account('CGST Payable', 'liability')
     sgst_acc = get_or_create_account('SGST Payable', 'liability')
     igst_acc = get_or_create_account('IGST Payable', 'liability')
+    
+    cgst_itc_acc = get_or_create_account('CGST Receivable', 'asset')
+    sgst_itc_acc = get_or_create_account('SGST Receivable', 'asset')
+    igst_itc_acc = get_or_create_account('IGST Receivable', 'asset')
 
     cgst_balance = get_account_balance(cgst_acc.id)
     sgst_balance = get_account_balance(sgst_acc.id)
     igst_balance = get_account_balance(igst_acc.id)
     total_liability = cgst_balance + sgst_balance + igst_balance
+    
+    cgst_itc = get_account_balance(cgst_itc_acc.id)
+    sgst_itc = get_account_balance(sgst_itc_acc.id)
+    igst_itc = get_account_balance(igst_itc_acc.id)
+    total_itc = cgst_itc + sgst_itc + igst_itc
+    
+    itc_to_setoff = min(total_itc, total_liability)
 
     return render_template('gst_payment.html',
                     total_liability=total_liability,
                     cgst_balance=cgst_balance,
                     sgst_balance=sgst_balance,
-                    igst_balance=igst_balance)
+                    igst_balance=igst_balance,
+                    cgst_itc=cgst_itc,
+                    sgst_itc=sgst_itc,
+                    igst_itc=igst_itc,
+                    total_itc=total_itc,
+                    itc_to_setoff=itc_to_setoff)
 
 @bp.route('/reports/payroll-summary')
 @login_required
@@ -236,20 +232,25 @@ def payroll_summary():
 @bp.route('/reports/aging')
 @login_required
 def aging_report():
-    from models import Purchase, Customer, Vendor
+    from models import Purchase, Customer, Vendor, Payment, PurchasePayment
     
     today = date.today()
     
     customer_model = Customer.query
     sales_credit = Sales.query.filter(
-        Sales.payment_type == 'credit',
-        Sales.payment_status != 'paid'
+        Sales.payment_type == 'credit'
     ).all()
     
     ar_items = []
     for sale in sales_credit:
         customer = db.session.get(Customer, sale.customer_id) if sale.customer_id else None
         days_outstanding = (today - sale.invoice_date).days if sale.invoice_date else 0
+        
+        already_paid = sum(float(p.amount or 0) for p in sale.payments)
+        outstanding = float(sale.total_amount or 0) - already_paid
+        
+        if outstanding <= 0:
+            continue
         
         if days_outstanding <= 30:
             bucket = 'current'
@@ -264,20 +265,25 @@ def aging_report():
             'party_name': customer.name if customer else 'Unknown',
             'invoice_number': sale.invoice_number,
             'invoice_date': sale.invoice_date,
-            'amount': float(sale.total_amount or 0),
+            'amount': outstanding,
             'days_outstanding': days_outstanding,
             'bucket': bucket
         })
     
     purchases_credit = Purchase.query.filter(
-        Purchase.payment_type == 'credit',
-        Purchase.payment_status != 'paid'
+        Purchase.payment_type == 'credit'
     ).all()
     
     ap_items = []
     for purchase in purchases_credit:
         vendor = db.session.get(Vendor, purchase.vendor_id) if purchase.vendor_id else None
         days_outstanding = (today - purchase.invoice_date).days if purchase.invoice_date else 0
+        
+        already_paid = sum(float(p.amount or 0) for p in purchase.payments)
+        outstanding = float(purchase.total_amount or 0) - already_paid
+        
+        if outstanding <= 0:
+            continue
         
         if days_outstanding <= 30:
             bucket = 'current'
@@ -292,7 +298,7 @@ def aging_report():
             'party_name': vendor.name if vendor else purchase.vendor_name or 'Unknown',
             'invoice_number': purchase.invoice_number,
             'invoice_date': purchase.invoice_date,
-            'amount': float(purchase.total_amount or 0),
+            'amount': outstanding,
             'days_outstanding': days_outstanding,
             'bucket': bucket
         })

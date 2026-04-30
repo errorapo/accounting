@@ -2,6 +2,7 @@ import os
 import uuid
 import time
 import logging
+import base64
 from logging.handlers import RotatingFileHandler
 from dotenv import load_dotenv
 load_dotenv()
@@ -32,7 +33,6 @@ def create_app(config_name=None):
     if config_name is None:
         config_name = os.environ.get('FLASK_ENV', 'development')
     
-    # Skip auto-init for testing
     skip_init = os.environ.get('SKIP_INIT_DEFAULT_DATA', 'false').lower() == 'true'
     
     app = Flask(__name__)
@@ -41,7 +41,6 @@ def create_app(config_name=None):
     if hasattr(cfg, 'init_app'):
         cfg.init_app(app)
     
-    # Register custom Jinja2 filter
     app.jinja_env.filters['format_inr'] = format_inr
     
     csrf = CSRFProtect(app)
@@ -54,11 +53,11 @@ def create_app(config_name=None):
         storage_uri=os.environ.get('REDIS_URL', 'memory://')
     )
 
-    # Request ID + timing hooks
     @app.before_request
     def before_request():
         g.start_time = time.time()
         g.request_id = str(uuid.uuid4())[:8]
+        g.csp_nonce = base64.b64encode(os.urandom(16)).decode()
 
     @app.after_request
     def after_request(response):
@@ -74,11 +73,13 @@ def create_app(config_name=None):
 
     @app.after_request
     def add_security_headers(response):
+        nonce = getattr(g, 'csp_nonce', '')
+        csp_header = f"default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'nonce-{nonce}'; style-src 'self' 'unsafe-inline';"
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['X-Frame-Options'] = 'DENY'
         response.headers['X-XSS-Protection'] = '1; mode=block'
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
-        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
+        response.headers['Content-Security-Policy'] = csp_header
         return response
     
     from routes import auth, dashboard, payroll, inventory, sales, purchases, accounts, reports, vendor
@@ -109,6 +110,8 @@ def create_app(config_name=None):
 
     limiter.exempt(health)
     limiter.exempt(ready)
+    
+    app.limiter = limiter
 
     # Production file logging (not in debug/testing)
     if not app.debug and not app.testing:

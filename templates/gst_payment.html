@@ -26,6 +26,82 @@
         </table>
     </div>
 
+    <div style="background: var(--bg-dark); padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+        <h3 style="color: var(--accent-teal); margin-bottom: 10px;">Input Tax Credit (ITC) Available</h3>
+        <table style="width: 100%;">
+            <tr>
+                <td>IGST Receivable (ITC)</td>
+                <td style="text-align: right;">₹{{ "%.2f"|format(igst_itc) }}</td>
+            </tr>
+            <tr>
+                <td>CGST Receivable (ITC)</td>
+                <td style="text-align: right;">₹{{ "%.2f"|format(cgst_itc) }}</td>
+            </tr>
+            <tr>
+                <td>SGST Receivable (ITC)</td>
+                <td style="text-align: right;">₹{{ "%.2f"|format(sgst_itc) }}</td>
+            </tr>
+            <tr style="border-top: 2px solid var(--accent-teal);">
+                <td><strong>Total ITC Available</strong></td>
+                <td style="text-align: right; font-size: 18px;"><strong>₹{{ "%.2f"|format(total_itc) }}</strong></td>
+            </tr>
+        </table>
+        
+        {% if total_itc > 0 and total_liability > 0 %}
+        <div style="margin-top: 15px; padding: 10px; background: rgba(12,166,120,0.1); border-radius: 5px;">
+            <h4 style="color: var(--accent-teal); margin-bottom: 8px;">ITC Setoff Calculation (Section 49)</h4>
+            <table style="width: 100%; font-size: 14px;">
+                <tr>
+                    <td>IGST ITC → IGST Liability</td>
+                    <td style="text-align: right;">₹{{ "%.2f"|format(min(igst_itc, igst_balance)) }}</td>
+                </tr>
+                {% if igst_itc > igst_balance %}
+                <tr>
+                    <td>Remaining IGST ITC → CGST Liability</td>
+                    <td style="text-align: right;">₹{{ "%.2f"|format(min(igst_itc - igst_balance, cgst_balance)) }}</td>
+                </tr>
+                {% endif %}
+                {% if igst_itc > igst_balance + cgst_balance %}
+                <tr>
+                    <td>Remaining IGST ITC → SGST Liability</td>
+                    <td style="text-align: right;">₹{{ "%.2f"|format(igst_itc - igst_balance - cgst_balance) }}</td>
+                </tr>
+                {% endif %}
+                <tr>
+                    <td>CGST ITC → CGST Liability</td>
+                    <td style="text-align: right;">₹{{ "%.2f"|format(min(cgst_itc, cgst_balance)) }}</td>
+                </tr>
+                <tr>
+                    <td>SGST ITC → SGST Liability</td>
+                    <td style="text-align: right;">₹{{ "%.2f"|format(min(sgst_itc, sgst_balance)) }}</td>
+                </tr>
+                <tr style="border-top: 2px solid var(--accent-teal); font-weight: bold;">
+                    <td>Total ITC to be Set-Off</td>
+                    <td style="text-align: right;">₹{{ "%.2f"|format(itc_to_setoff) }}</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div style="margin-top: 15px; padding: 15px; background: rgba(26,86,219,0.1); border-radius: 5px;">
+            <h4 style="color: var(--accent-blue); margin-bottom: 8px;">Net Cash Payment Required</h4>
+            <table style="width: 100%;">
+                <tr>
+                    <td>Total Liability</td>
+                    <td style="text-align: right;">₹{{ "%.2f"|format(total_liability) }}</td>
+                </tr>
+                <tr>
+                    <td>Less: ITC Set-Off</td>
+                    <td style="text-align: right; color: var(--red);">(-) ₹{{ "%.2f"|format(itc_to_setoff) }}</td>
+                </tr>
+                <tr style="border-top: 2px solid var(--accent-blue); font-size: 18px; font-weight: bold;">
+                    <td>Net Cash Payment</td>
+                    <td style="text-align: right;">₹{{ "%.2f"|format(total_liability - itc_to_setoff) }}</td>
+                </tr>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+
     {% if total_liability <= 0 %}
     <p style="color: green; font-size: 18px;">No GST liability - you have ITC credit to carry forward!</p>
     {% elif total_liability > 0 %}
@@ -42,7 +118,7 @@
         </div>
         <div class="form-group">
             <label>Amount to Pay</label>
-            <input type="number" name="amount" step="0.01" value="{{ total_liability }}" required>
+            <input type="number" name="amount" step="0.01" value="{{ max(0, total_liability - itc_to_setoff) }}" required>
         </div>
         <div class="form-group">
             <label>Payment Mode</label>

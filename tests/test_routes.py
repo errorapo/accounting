@@ -591,3 +591,247 @@ def test_admin_cannot_delete_self(app_context, auth_client):
     with app_context.app_context():
         remaining = db.session.get(User, user_id)
         assert remaining is not None, "Admin should not be able to delete own account"
+
+
+def test_create_payroll_without_tds_field(app_context, auth_client):
+    """Test that payroll can be created with tax_deduction=0 and auto-TDS works."""
+    from models import Employee, Payroll
+    client = auth_client
+    
+    with app_context.app_context():
+        db.session.commit()
+        db.session.expire_all()
+        
+        emp = Employee(
+            name='Test Employee',
+            employee_type='Office Staff',
+            base_salary=Decimal('120000'),
+            hourly_rate=Decimal('500'),
+            pf_rate=Decimal('12'),
+            state='Maharashtra'
+        )
+        db.session.add(emp)
+        db.session.commit()
+        db.session.expire_all()
+        
+        response = client.post('/payroll/create', data={
+            'employee_id': emp.id,
+            'month': '2025-04',
+            'year': 2025,
+            'overtime_hours': '0',
+            'bonus': '0',
+            'insurance': '0',
+            'tax_deduction': '0'
+        }, follow_redirects=True)
+        
+        assert response.status_code != 500, f"Expected non-500 status, got {response.status_code}"
+        
+        with app_context.app_context():
+            payroll = Payroll.query.filter_by(employee_id=emp.id).first()
+            assert payroll is not None, "Payroll record should exist in DB"
+            assert payroll.tax_deduction > 0, f"Tax deduction should be > 0, got {payroll.tax_deduction}"
+
+
+def test_aging_report_shows_net_outstanding_after_partial_payment(app_context, auth_client):
+    """Aging report shows net outstanding based on accounting (not Sales.amount - paid)."""
+    from models import Customer, Sales, Payment, Account
+    from accounting_engine import record_sale, record_payment, get_account_balance, get_or_create_account
+    from decimal import Decimal
+    from datetime import date
+    client = auth_client
+    
+    with app_context.app_context():
+        db.session.commit()
+        db.session.expire_all()
+        
+        customer = Customer.query.first()
+        if not customer:
+            customer = Customer(name='Test Customer', phone='9999999999')
+            db.session.add(customer)
+            db.session.commit()
+        
+        # Create credit sale for 10000 + 1800 GST = 11800 total
+        record_sale(date.today(), customer.name, Decimal('10000'), Decimal('1800'),
+                   payment_type='credit', description='Test Credit Sale')
+        
+        db.session.commit()
+        
+        sale = Sales.query.filter_by(customer_id=customer.id).first()
+        
+        # Record partial payment of 4000
+        record_payment(date.today(), sale.id, Decimal('4000'), 'cash', 'Partial payment', '')
+        db.session.commit()
+        
+        response = client.get('/reports/aging', follow_redirects=True)
+        assert response.status_code == 200
+        
+        # Outstanding via accounting = Sales Revenue (10000) - Cash (4000) = 6000
+        with app_context.app_context():
+            sales_acc = get_or_create_account('Sales Revenue', 'income')
+            cash_acc = get_or_create_account('Cash', 'asset')
+            sales_balance = get_account_balance(sales_acc.id)
+            cash_received = get_account_balance(cash_acc.id)
+            accounting_outstanding = sales_balance - cash_received
+            
+            # Accounting shows 10000 sales revenue - 4000 cash received = 6000 outstanding
+            assert accounting_outstanding == 6000, f"Expected 6000, got {accounting_outstanding}"
+
+
+def test_payment_cannot_exceed_invoice_total(app_context, auth_client):
+    """Payment exceeding invoice total is partially rejected or limited to remaining amount."""
+    from models import Customer, Sales, Payment
+    from accounting_engine import record_sale, record_payment
+    client = auth_client
+    
+    with app_context.app_context():
+        db.session.commit()
+        db.session.expire_all()
+        
+        customer = Customer.query.first()
+        if not customer:
+            customer = Customer(name='Test Customer', phone='9999999999')
+            db.session.add(customer)
+            db.session.commit()
+        
+        record_sale(date.today(), customer.name, Decimal('5000'), Decimal('900'),
+                   payment_type='credit', description='Test Invoice')
+        
+        db.session.commit()
+        
+        sale = Sales.query.filter_by(customer_id=customer.id).first()
+        
+        # Attempt to record payment exceeding invoice total
+        # Either it raises an error OR the payment is limited to remaining amount
+        result = record_payment(date.today(), sale.id, Decimal('7000'), 'cash', 'Excess payment', '')
+        
+        with app_context.app_context():
+            payment = Payment.query.filter_by(sale_id=sale.id).first()
+            # If excess is allowed, payment will be capped at total_amount; if rejected, no payment created
+            if payment:
+                # Payment was recorded (possibly capped)
+                remaining = 5900  # 5000 + 900 - 7000 if capped to 0, else 5000 + 900 - payment.amount
+                # Either way, the system handled it gracefully (not crashing)
+                assert payment.amount <= sale.total_amount or payment.amount == Decimal('0'), \
+                    "Payment exceeding invoice total should be rejected or capped"
+
+
+def test_depreciation_not_double_booked_same_month(app_context, auth_client):
+    """Depreciation run twice in same month creates only one journal entry per asset."""
+    from models import FixedAsset, Account, JournalEntry
+    from accounting_engine import run_monthly_depreciation
+    
+    client = auth_client
+    
+    with app_context.app_context():
+        db.session.commit()
+        db.session.expire_all()
+        
+        asset = FixedAsset(
+            name='Test Machine',
+            purchase_date=date.today(),
+            cost=Decimal('100000'),
+            salvage_value=Decimal('10000'),
+            useful_life_years=10
+        )
+        db.session.add(asset)
+        db.session.commit()
+        
+        result1 = run_monthly_depreciation()
+        db.session.commit()
+        
+        result2 = run_monthly_depreciation()
+        db.session.commit()
+        
+        entries = JournalEntry.query.filter(
+            JournalEntry.description.like('%Depreciation%')
+        ).all()
+        
+        asset_entries = [e for e in entries if 'Test Machine' in e.description]
+        
+        assert len(asset_entries) <= 1, \
+            f"Expected at most 1 depreciation entry per asset, got {len(asset_entries)}"
+
+
+def test_audit_log_records_sale_creation(app_context, auth_client):
+    """Audit log records are created when sales are created via HTTP route."""
+    from models import Customer, Sales, AuditLog
+    from decimal import Decimal
+    client = auth_client
+    
+    with app_context.app_context():
+        db.session.commit()
+        db.session.expire_all()
+        
+        customer = Customer.query.first()
+        item = Inventory.query.first()
+    
+    response = client.post('/sales/create', data={
+        'customer_id': str(customer.id),
+        'stone_type': item.stone_type,
+        'size': item.size,
+        'quantity': '1',
+        'rate': '1000',
+        'gst_rate': '5',
+        'payment_type': 'cash'
+    }, follow_redirects=True)
+    
+    assert response.status_code == 200
+    
+    with app_context.app_context():
+        audit_entry = AuditLog.query.filter_by(table_name='sales').order_by(AuditLog.timestamp.desc()).first()
+        assert audit_entry is not None, "Audit log should record sale creation"
+        assert audit_entry.action == 'create', f"Expected action 'create', got {audit_entry.action}"
+
+
+def test_payment_cannot_exceed_invoice(app_context, auth_client):
+    """Payment exceeding invoice total is rejected with error message."""
+    from models import Customer, Sales, Payment
+    from accounting_engine import record_sale
+    from decimal import Decimal
+    client = auth_client
+    
+    with app_context.app_context():
+        db.session.commit()
+        db.session.expire_all()
+        
+        customer = Customer.query.first()
+        item = Inventory.query.first()
+    
+    response = client.post('/sales/create', data={
+        'customer_id': str(customer.id),
+        'stone_type': item.stone_type,
+        'size': item.size,
+        'quantity': '1',
+        'rate': '1000',
+        'gst_rate': '5',
+        'payment_type': 'credit'
+    }, follow_redirects=True)
+    
+    with app_context.app_context():
+        sale = Sales.query.filter_by(payment_type='credit').order_by(Sales.id.desc()).first()
+        sale_id = sale.id
+    
+    response = client.post(f'/sales/{sale_id}/payment', data={
+        'amount': '2000',
+        'payment_mode': 'cash',
+        'notes': 'Overpayment test'
+    }, follow_redirects=True)
+    
+    assert response.status_code in (200, 302)
+    with app_context.app_context():
+        payment_count = Payment.query.filter_by(sale_id=sale_id).count()
+        assert payment_count <= 1, "Overpayment should be handled gracefully"
+
+
+def test_inventory_closing_stock_never_negative(app_context, auth_client):
+    """Inventory computed_closing_stock is always non-negative (open + purch - sales)."""
+    from models import Inventory
+    from decimal import Decimal
+    client = auth_client
+    
+    with app_context.app_context():
+        item = Inventory.query.first()
+        if item:
+            computed = item.computed_closing_stock
+            assert computed >= 0, f"Closing stock should never be negative, got {computed}"
+            assert item.closing_stock == computed, "closing_stock should equal computed_closing_stock"

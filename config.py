@@ -14,10 +14,9 @@ class Config:
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///rock_mining_erp.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
-    SESSION_COOKIE_SECURE = True
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
-    PERMANENT_SESSION_LIFETIME = timedelta(hours=24)
+    PERMANENT_SESSION_LIFETIME = timedelta(seconds=3600)
     
     WTF_CSRF_ENABLED = True
     WTF_CSRF_TIME_LIMIT = 3600

@@ -12,6 +12,18 @@ from models import Account, Transaction, JournalEntry
 from datetime import datetime, date, timedelta
 from sqlalchemy import func
 
+
+def to_decimal(value):
+    """Convert value to Decimal safely."""
+    if value is None:
+        return Decimal('0')
+    if isinstance(value, Decimal):
+        return value
+    if isinstance(value, (int, float)):
+        return Decimal(str(value))
+    return Decimal(str(value))
+
+
 ACCOUNT_TYPES = {
     'asset': {'normal_balance': 'debit', 'increases_with': 'debit'},
     'liability': {'normal_balance': 'credit', 'increases_with': 'credit'},
@@ -21,57 +33,61 @@ ACCOUNT_TYPES = {
 }
 
 DEFAULT_ACCOUNTS = [
-    ('Cash', 'asset'),
-    ('Bank', 'asset'),
-    ('Accounts Receivable', 'asset'),
-    ('Inventory', 'asset'),
-    ('Fixed Assets', 'asset'),
-    ('Accumulated Depreciation', 'asset'),  # Contra-asset - reduces fixed asset value
-    ('CGST Receivable', 'asset'),
-    ('SGST Receivable', 'asset'),
-    ('IGST Receivable', 'asset'),
-    ('Accounts Payable', 'liability'),
-    ('Loans Payable', 'liability'),
-    ('Royalty Payable', 'liability'),
-    ('PF Payable', 'liability'),
-    ('TDS Payable', 'liability'),
-    ('Professional Tax Payable', 'liability'),
-    ('GST Payable', 'liability'),
-    ('CGST Payable', 'liability'),
-    ('SGST Payable', 'liability'),
-    ('IGST Payable', 'liability'),
-    ('Capital', 'capital'),
-    ('Retained Earnings', 'capital'),
-    ('Opening Balance Equity', 'capital'),
-    ('Sales Revenue', 'income'),
-    ('Service Revenue', 'income'),
-    ('Purchases', 'expense'),
-    ('COGS', 'expense'),
-    ('Salary Expense', 'expense'),
-    ('PF Expense', 'expense'),
-    ('Rent Expense', 'expense'),
-    ('Utilities Expense', 'expense'),
-    ('Transport Expense', 'expense'),
-    ('Office Expenses', 'expense'),
-    ('Interest Expense', 'expense'),
-    ('Depreciation Expense', 'expense'),
-    ('Royalty Expense', 'expense'),
-    ('Professional Tax Expense', 'expense'),
+    ('Cash', 'asset', False),
+    ('Bank', 'asset', False),
+    ('Accounts Receivable', 'asset', False),
+    ('Inventory', 'asset', False),
+    ('Fixed Assets', 'asset', False),
+    ('Accumulated Depreciation', 'asset', True),
+    ('CGST Receivable', 'asset', False),
+    ('SGST Receivable', 'asset', False),
+    ('IGST Receivable', 'asset', False),
+    ('Accounts Payable', 'liability', False),
+    ('Loans Payable', 'liability', False),
+    ('Royalty Payable', 'liability', False),
+    ('PF Payable', 'liability', False),
+    ('TDS Payable', 'liability', False),
+    ('Professional Tax Payable', 'liability', False),
+    ('GST Payable', 'liability', False),
+    ('CGST Payable', 'liability', False),
+    ('SGST Payable', 'liability', False),
+    ('IGST Payable', 'liability', False),
+    ('Capital', 'capital', False),
+    ('Retained Earnings', 'capital', False),
+    ('Opening Balance Equity', 'capital', False),
+    ('Sales Revenue', 'income', False),
+    ('Service Revenue', 'income', False),
+    ('Purchases', 'expense', False),
+    ('COGS', 'expense', False),
+    ('Salary Expense', 'expense', False),
+    ('PF Expense', 'expense', False),
+    ('Rent Expense', 'expense', False),
+    ('Utilities Expense', 'expense', False),
+    ('Transport Expense', 'expense', False),
+    ('Office Expenses', 'expense', False),
+    ('Interest Expense', 'expense', False),
+    ('Depreciation Expense', 'expense', False),
+    ('Royalty Expense', 'expense', False),
+    ('Professional Tax Expense', 'expense', False),
 ]
 
-def get_or_create_account(name, account_type):
+
+def get_or_create_account(name, account_type, is_contra=False):
     """Get existing account or create new one."""
     account = Account.query.filter_by(name=name, is_active=True).first()
     if not account:
-        account = Account(name=name, account_type=account_type)
+        account = Account(name=name, account_type=account_type, is_contra=is_contra)
         db.session.add(account)
+        db.session.flush()
+    elif account.is_contra != is_contra:
+        account.is_contra = is_contra
         db.session.flush()
     return account
 
 def initialize_default_accounts():
     """Create default chart of accounts if not exists."""
-    for name, acc_type in DEFAULT_ACCOUNTS:
-        get_or_create_account(name, acc_type)
+    for name, acc_type, is_contra in DEFAULT_ACCOUNTS:
+        get_or_create_account(name, acc_type, is_contra)
     db.session.commit()
 
 def get_period_balance(account_id, start_date=None, end_date=None):
@@ -315,6 +331,7 @@ def get_balance_sheet(as_of_date=None):
     
     FIXED: Retained earnings now accumulates ALL prior profits from start of FY.
     FIXED: Variable name collision - renamed date to report_date to avoid shadowing datetime.date.
+    FIXED: Contra-assets (Accumulated Depreciation) are subtracted from total assets.
     """
     report_date = as_of_date or datetime.now().date()
     
@@ -332,6 +349,8 @@ def get_balance_sheet(as_of_date=None):
     total_assets = 0
     total_liabilities = 0
     total_capital = 0
+    accumulated_depreciation = 0
+    fixed_assets_gross = 0
     
     for acc_type in ['asset', 'liability', 'capital']:
         accounts = Account.query.filter_by(account_type=acc_type, is_active=True).all()
@@ -342,8 +361,15 @@ def get_balance_sheet(as_of_date=None):
             balance = get_account_balance(account.id, report_date)
             if balance != 0:
                 if acc_type == 'asset':
-                    assets.append({'name': account.name, 'balance': balance})
-                    total_assets += balance
+                    if account.is_contra:
+                        accumulated_depreciation += balance
+                        total_assets -= balance
+                        assets.append({'name': account.name, 'balance': balance, 'is_contra': True})
+                    else:
+                        if account.name == 'Fixed Assets':
+                            fixed_assets_gross = balance
+                        assets.append({'name': account.name, 'balance': balance})
+                        total_assets += balance
                 elif acc_type == 'liability':
                     liabilities.append({'name': account.name, 'balance': balance})
                     total_liabilities += balance
@@ -367,6 +393,8 @@ def get_balance_sheet(as_of_date=None):
         'total_assets': total_assets,
         'total_liabilities': total_liabilities,
         'total_capital': total_capital,
+        'fixed_assets_gross': fixed_assets_gross,
+        'accumulated_depreciation': abs(accumulated_depreciation),
         'is_balanced': abs(total_assets - (total_liabilities + total_capital)) < 0.01,
         'as_of_date': report_date
     }
@@ -576,15 +604,23 @@ def record_purchase(date, vendor_name, amount, gst_amount, itc_eligible=True, pa
         create_journal_entry(date, desc, purchases_acc.id, credit_account.id, total_invoice)
 
     # Update inventory weighted average cost
+    # Formula: new_rate = (old_stock * old_rate + new_qty * new_unit_cost) / (old_stock + new_qty)
     if is_inventory_purchase and item:
-        unit_cost = amount / Decimal(str(quantity)) if quantity > 0 else Decimal('0')
-        new_stock = (item.closing_stock or 0) + Decimal(str(quantity))
-        new_total_cost = (item.closing_stock or 0) * (item.rate_per_ton or 0) + Decimal(str(quantity)) * unit_cost
+        old_stock = to_decimal(item.closing_stock or 0)
+        old_rate = to_decimal(item.rate_per_ton or 0)
+        new_qty = to_decimal(quantity)
+        new_unit_cost = to_decimal(amount) / new_qty if new_qty > 0 else Decimal('0')
+        
+        new_stock = old_stock + new_qty
         if new_stock > 0:
+            new_total_cost = (old_stock * old_rate) + (new_qty * new_unit_cost)
             item.rate_per_ton = new_total_cost / new_stock
+        else:
+            new_total_cost = Decimal('0')
+        
         item.total_cost = new_total_cost
         item.closing_stock = new_stock
-        item.purchases = (item.purchases or 0) + Decimal(str(quantity))
+        item.purchases = (item.purchases or 0) + new_qty
 
     return {
         'type': 'purchase',
@@ -596,7 +632,43 @@ def record_purchase(date, vendor_name, amount, gst_amount, itc_eligible=True, pa
         'description': desc
     }
 
-def record_salary_payment(date, employee_name, gross_salary, pf_deduction=0, employer_pf=0, tax_deduction=0, description="Salary"):
+def compute_professional_tax(state, monthly_gross):
+    """Calculate professional tax based on state and monthly gross.
+    
+    Slabs:
+        Maharashtra: 0 if gross < 7500, 175 if 7500-10000, 200 if >= 10000 (300 in Feb)
+        Karnataka: 0 if gross < 15000, 200 if >= 15000
+        Other states: 200 (default)
+    
+    Args:
+        state: Indian state name (e.g., 'Maharashtra', 'Karnataka')
+        monthly_gross: Monthly gross salary as Decimal or float
+    
+    Returns:
+        Professional tax amount as Decimal
+    """
+    from datetime import datetime
+    gross = to_decimal(monthly_gross)
+    state = (state or 'Maharashtra').strip()
+    
+    is_february = datetime.now().month == 2
+    
+    if state == 'Maharashtra':
+        if gross < 7500:
+            return Decimal('0')
+        elif gross <= 10000:
+            return Decimal('175')
+        else:
+            return Decimal('300') if is_february else Decimal('200')
+    elif state == 'Karnataka':
+        if gross < 15000:
+            return Decimal('0')
+        else:
+            return Decimal('200')
+    else:
+        return Decimal('200')
+
+def record_salary_payment(date, employee_name, gross_salary, pf_deduction=0, employer_pf=0, tax_deduction=0, professional_tax=0, description="Salary"):
     """Record salary payment with proper compound journal entry.
 
     Compound Journal Entry:
@@ -623,11 +695,13 @@ def record_salary_payment(date, employee_name, gross_salary, pf_deduction=0, emp
     cash_acc = get_or_create_account('Cash', 'asset')
     pf_payable = get_or_create_account('PF Payable', 'liability')
     tds_payable = get_or_create_account('TDS Payable', 'liability')
+    prof_tax_expense = get_or_create_account('Professional Tax Expense', 'expense')
+    prof_tax_payable = get_or_create_account('Professional Tax Payable', 'liability')
 
     if isinstance(date, str):
         date = datetime.strptime(date, '%Y-%m-%d').date()
 
-    net_salary = gross_salary - pf_deduction - tax_deduction
+    net_salary = gross_salary - pf_deduction - tax_deduction - professional_tax
     base_desc = f"Salary - {employee_name} - {description}"
 
     # Create compound journal entry using no_commit version
@@ -674,7 +748,19 @@ def record_salary_payment(date, employee_name, gross_salary, pf_deduction=0, emp
         db.session.add(txn5)
         db.session.add(txn6)
 
-    # Line 4: Dr PF Expense, Cr PF Payable (employer contribution)
+    # Line 4: Dr Professional Tax Expense, Cr Professional Tax Payable
+    if professional_tax > 0:
+        prof_tax_desc = base_desc + " (Professional Tax)"
+        txn_pt1 = Transaction(date=date, description=prof_tax_desc,
+            account_id=prof_tax_expense.id, debit=professional_tax, credit=0, entry_type='debit',
+            is_posted=True, original_entry_id=journal.id)
+        txn_pt2 = Transaction(date=date, description=prof_tax_desc,
+            account_id=prof_tax_payable.id, debit=0, credit=professional_tax, entry_type='credit',
+            is_posted=True, original_entry_id=journal.id)
+        db.session.add(txn_pt1)
+        db.session.add(txn_pt2)
+
+    # Line 5: Dr PF Expense, Cr PF Payable (employer contribution)
     if employer_pf > 0:
         employer_desc = f"Employer PF - {employee_name}"
         journal2 = JournalEntry(
@@ -814,8 +900,130 @@ def record_purchase_payment(date, purchase_id, amount, payment_mode='cash', note
         'description': desc
     }
 
+
+def apply_itc_setoff(date, cgst_liability=0, sgst_liability=0, igst_liability=0):
+    """Apply ITC setoff against GST liabilities as per Section 49.
+    
+    Statutory order of ITC utilization:
+    a) IGST ITC → IGST liability first, then remaining → CGST liability, then → SGST liability
+    b) CGST ITC → CGST liability only
+    c) SGST ITC → SGST liability only
+    
+    Args:
+        date: Date of setoff
+        cgst_liability: CGST liability balance
+        sgst_liability: SGST liability balance
+        igst_liability: IGST liability balance
+    
+    Returns:
+        dict with {igst_cash_due, cgst_cash_due, sgst_cash_due, total_itc_used, entries_created}
+    """
+    if isinstance(date, str):
+        date = datetime.strptime(date, '%Y-%m-%d').date()
+    
+    igst_itc_acc = get_or_create_account('IGST Receivable', 'asset')
+    cgst_itc_acc = get_or_create_account('CGST Receivable', 'asset')
+    sgst_itc_acc = get_or_create_account('SGST Receivable', 'asset')
+    igst_payable = get_or_create_account('IGST Payable', 'liability')
+    cgst_payable = get_or_create_account('CGST Payable', 'liability')
+    sgst_payable = get_or_create_account('SGST Payable', 'liability')
+    
+    igst_itc = to_decimal(get_account_balance(igst_itc_acc.id))
+    cgst_itc = to_decimal(get_account_balance(cgst_itc_acc.id))
+    sgst_itc = to_decimal(get_account_balance(sgst_itc_acc.id))
+    
+    igst_liability = to_decimal(igst_liability)
+    cgst_liability = to_decimal(cgst_liability)
+    sgst_liability = to_decimal(sgst_liability)
+    
+    entries_created = []
+    total_itc_used = Decimal('0')
+    
+    remaining_igst_itc = igst_itc
+    
+    if remaining_igst_itc > 0 and igst_liability > 0:
+        used = min(remaining_igst_itc, igst_liability)
+        if used > 0:
+            create_journal_entry(
+                date, f"ITC Setoff - IGST ITC against IGST Liability",
+                igst_payable.id, igst_itc_acc.id, used
+            )
+            remaining_igst_itc -= used
+            total_itc_used += used
+            entries_created.append({'type': 'igst_igst', 'amount': float(used)})
+    
+    if remaining_igst_itc > 0 and cgst_liability > 0:
+        used = min(remaining_igst_itc, cgst_liability)
+        if used > 0:
+            create_journal_entry(
+                date, f"ITC Setoff - IGST ITC against CGST Liability",
+                cgst_payable.id, igst_itc_acc.id, used
+            )
+            remaining_igst_itc -= used
+            total_itc_used += used
+            entries_created.append({'type': 'igst_cgst', 'amount': float(used)})
+    
+    if remaining_igst_itc > 0 and sgst_liability > 0:
+        used = min(remaining_igst_itc, sgst_liability)
+        if used > 0:
+            create_journal_entry(
+                date, f"ITC Setoff - IGST ITC against SGST Liability",
+                sgst_payable.id, igst_itc_acc.id, used
+            )
+            remaining_igst_itc -= used
+            total_itc_used += used
+            entries_created.append({'type': 'igst_sgst', 'amount': float(used)})
+    
+    # Recalculate remaining liabilities after IGST setoff
+    cgst_liability = to_decimal(get_account_balance(cgst_payable.id))
+    sgst_liability = to_decimal(get_account_balance(sgst_payable.id))
+    
+    if cgst_itc > 0 and cgst_liability > 0:
+        used = min(cgst_itc, cgst_liability)
+        if used > 0:
+            create_journal_entry(
+                date, f"ITC Setoff - CGST ITC against CGST Liability",
+                cgst_payable.id, cgst_itc_acc.id, used
+            )
+            total_itc_used += used
+            entries_created.append({'type': 'cgst_cgst', 'amount': float(used)})
+    
+    # Recalculate SGST liability after CGST setoff
+    sgst_liability = to_decimal(get_account_balance(sgst_payable.id))
+    
+    if sgst_itc > 0 and sgst_liability > 0:
+        used = min(sgst_itc, sgst_liability)
+        if used > 0:
+            create_journal_entry(
+                date, f"ITC Setoff - SGST ITC against SGST Liability",
+                sgst_payable.id, sgst_itc_acc.id, used
+            )
+            total_itc_used += used
+            entries_created.append({'type': 'sgst_sgst', 'amount': float(used)})
+    
+    igst_cash_due = max(Decimal('0'), igst_liability - (igst_itc - (igst_itc - remaining_igst_itc)))
+    cgst_cash_due = max(Decimal('0'), cgst_liability - total_itc_used + remaining_igst_itc)
+    sgst_cash_due = max(Decimal('0'), sgst_liability)
+    
+    actual_igst_used = igst_itc - remaining_igst_itc
+    if actual_igst_used > cgst_liability:
+        cgst_cash_due = Decimal('0')
+        remaining_after_igst_cgst = actual_igst_used - cgst_liability
+        sgst_cash_due = max(Decimal('0'), sgst_liability - remaining_after_igst_cgst)
+    
+    return {
+        'igst_cash_due': float(igst_cash_due),
+        'cgst_cash_due': float(cgst_cash_due),
+        'sgst_cash_due': float(sgst_cash_due),
+        'total_itc_used': float(total_itc_used),
+        'entries_created': entries_created
+    }
+
+
 def record_gst_payment(date, amount, payment_mode='bank', notes='', gst_type='all'):
-    """Record GST paid to Government.
+    """Record GST paid to Government with ITC setoff.
+
+    First applies ITC setoff as per Section 49, then records cash payment for net amount.
 
     Journal Entry:
         Debit:  CGST/SGST/IGST Payable (reduces liability)
@@ -823,13 +1031,13 @@ def record_gst_payment(date, amount, payment_mode='bank', notes='', gst_type='al
 
     Args:
         date: Payment date
-        amount: GST amount being paid
+        amount: GST amount being paid (total liability before ITC)
         payment_mode: 'bank', 'cash', 'upi'
         notes: Optional notes
         gst_type: 'cgst', 'sgst', 'igst', 'all', or 'legacy'
 
     Returns:
-        dict with payment details
+        dict with payment details including ITC setoff results
     """
     if isinstance(date, str):
         date = datetime.strptime(date, '%Y-%m-%d').date()
@@ -837,31 +1045,42 @@ def record_gst_payment(date, amount, payment_mode='bank', notes='', gst_type='al
     if amount <= 0:
         raise ValueError("Amount must be positive")
 
-    if payment_mode == 'cash':
-        credit_account = get_or_create_account('Cash', 'asset')
-    else:
-        credit_account = get_or_create_account('Bank', 'asset')
-
-    desc = "GST Paid to Government"
-
+    cgst_payable = get_or_create_account('CGST Payable', 'liability')
+    sgst_payable = get_or_create_account('SGST Payable', 'liability')
+    igst_payable = get_or_create_account('IGST Payable', 'liability')
+    
+    cgst_liability = to_decimal(get_account_balance(cgst_payable.id))
+    sgst_liability = to_decimal(get_account_balance(sgst_payable.id))
+    igst_liability = to_decimal(get_account_balance(igst_payable.id))
+    
+    itc_result = apply_itc_setoff(date, cgst_liability, sgst_liability, igst_liability)
+    
     if gst_type == 'legacy':
-        gst_payable = get_or_create_account('GST Payable', 'liability')
-        create_journal_entry(date, desc, gst_payable.id, credit_account.id, amount)
+        credit_account = get_or_create_account('Cash' if payment_mode == 'cash' else 'Bank', 'asset')
+        gst_payable_acc = get_or_create_account('GST Payable', 'liability')
+        create_journal_entry(date, "GST Paid to Government", gst_payable_acc.id, credit_account.id, amount)
     elif gst_type == 'all':
-        split_amount = amount / 2
-        cgst_payable = get_or_create_account('CGST Payable', 'liability')
-        sgst_payable = get_or_create_account('SGST Payable', 'liability')
-        create_journal_entry(date, desc + " - CGST", cgst_payable.id, credit_account.id, split_amount)
-        create_journal_entry(date, desc + " - SGST", sgst_payable.id, credit_account.id, split_amount)
+        net_amount = to_decimal(amount) - to_decimal(itc_result['total_itc_used'])
+        if net_amount > 0:
+            credit_account = get_or_create_account('Cash' if payment_mode == 'cash' else 'Bank', 'asset')
+            split_amount = net_amount / 2
+            create_journal_entry(date, "GST Paid (after ITC) - CGST", cgst_payable.id, credit_account.id, split_amount)
+            create_journal_entry(date, "GST Paid (after ITC) - SGST", sgst_payable.id, credit_account.id, split_amount)
     elif gst_type == 'cgst':
-        cgst_payable = get_or_create_account('CGST Payable', 'liability')
-        create_journal_entry(date, desc + " - CGST", cgst_payable.id, credit_account.id, amount)
+        net_amount = to_decimal(amount) - to_decimal(itc_result['total_itc_used'])
+        if net_amount > 0:
+            credit_account = get_or_create_account('Cash' if payment_mode == 'cash' else 'Bank', 'asset')
+            create_journal_entry(date, "GST Paid (after ITC) - CGST", cgst_payable.id, credit_account.id, net_amount)
     elif gst_type == 'sgst':
-        sgst_payable = get_or_create_account('SGST Payable', 'liability')
-        create_journal_entry(date, desc + " - SGST", sgst_payable.id, credit_account.id, amount)
+        net_amount = to_decimal(amount) - to_decimal(itc_result['total_itc_used'])
+        if net_amount > 0:
+            credit_account = get_or_create_account('Cash' if payment_mode == 'cash' else 'Bank', 'asset')
+            create_journal_entry(date, "GST Paid (after ITC) - SGST", sgst_payable.id, credit_account.id, net_amount)
     elif gst_type == 'igst':
-        igst_payable = get_or_create_account('IGST Payable', 'liability')
-        create_journal_entry(date, desc + " - IGST", igst_payable.id, credit_account.id, amount)
+        net_amount = to_decimal(amount) - to_decimal(itc_result['total_itc_used'])
+        if net_amount > 0:
+            credit_account = get_or_create_account('Cash' if payment_mode == 'cash' else 'Bank', 'asset')
+            create_journal_entry(date, "GST Paid (after ITC) - IGST", igst_payable.id, credit_account.id, net_amount)
     else:
         raise ValueError("Invalid gst_type: must be 'cgst', 'sgst', 'igst', 'all', or 'legacy'")
 
@@ -871,7 +1090,9 @@ def record_gst_payment(date, amount, payment_mode='bank', notes='', gst_type='al
         'payment_mode': payment_mode,
         'gst_type': gst_type,
         'notes': notes,
-        'description': desc
+        'description': "GST Payment",
+        'itc_used': itc_result['total_itc_used'],
+        'itc_details': itc_result
     }
 
 def record_royalty_payment(date, amount, quantity, stone_type, payment_mode='bank', description='Royalty Payment'):
@@ -946,10 +1167,11 @@ def run_monthly_depreciation(as_of_date=None):
     for asset in assets:
         desc = f"Depreciation - {asset.name} - {month_key}"
 
+        # Exact match check to avoid duplicate depreciation entries
         existing = JournalEntry.query.filter(
-            JournalEntry.description.like(f"Depreciation - {asset.name}%")
-        ).all()
-        if any(month_key in (je.description or '') for je in existing):
+            JournalEntry.description == desc
+        ).first()
+        if existing:
             continue
 
         monthly_dep = (asset.cost - asset.salvage_value) / (asset.useful_life_years * 12)

@@ -17,11 +17,37 @@
             <h3 style="font-size: 13px; color: var(--blue); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Assets</h3>
             <table>
                 {% for item in assets %}
+                {% if item.is_contra %}
+                <tr style="color: var(--red);">
+                    <td style="padding-left: 16px;">Less: {{ item.name }}</td>
+                    <td class="amount">({{ item.balance|format_inr }})</td>
+                </tr>
+                {% else %}
                 <tr>
                     <td style="padding-left: 16px;">{{ item.name }}</td>
                     <td class="amount">{{ item.balance|format_inr }}</td>
                 </tr>
+                {% endif %}
                 {% endfor %}
+                
+                {# Show Fixed Assets breakdown if available #}
+                {% if (fixed_assets_gross|default(0)) > 0 %}
+                <tr style="border-top: 1px dashed var(--border); padding-top: 8px;">
+                    <td style="padding-left: 16px; font-weight: 500;">Fixed Assets (Gross)</td>
+                    <td class="amount" style="font-weight: 500;">{{ (fixed_assets_gross|default(0))|format_inr }}</td>
+                </tr>
+                {% if (accumulated_depreciation|default(0)) > 0 %}
+                <tr>
+                    <td style="padding-left: 16px; color: var(--red);">Less: Accumulated Depreciation</td>
+                    <td class="amount" style="color: var(--red);">({{ (accumulated_depreciation|default(0))|format_inr }})</td>
+                </tr>
+                <tr style="font-weight: 500;">
+                    <td style="padding-left: 16px;">Net Book Value</td>
+                    <td class="amount">{{ ((fixed_assets_gross|default(0)) - (accumulated_depreciation|default(0)))|format_inr }}</td>
+                </tr>
+                {% endif %}
+                {% endif %}
+                
                 <tr style="font-weight: 600; background: rgba(26,86,219,0.1);">
                     <td>Total Assets</td>
                     <td class="amount">{{ total_assets|format_inr }}</td>

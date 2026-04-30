@@ -5,7 +5,7 @@ from ext import db
 from models import Employee, Payroll, Attendance
 from datetime import datetime
 from decimal import Decimal
-from validators import parse_non_negative_float
+from validators import parse_non_negative_float, safe_decimal
 
 bp = Blueprint('payroll', __name__)
 
@@ -66,12 +66,13 @@ def add_employee():
         employee = Employee(
             name=request.form.get('name'),
             employee_type=request.form.get('employee_type'),
-            base_salary=float(request.form.get('base_salary', 0)),
-            hourly_rate=float(request.form.get('hourly_rate', 0)),
-            pf_rate=float(request.form.get('pf_rate', 12)),
-            transport_allowance=float(request.form.get('transport_allowance', 0)),
-            food_allowance=float(request.form.get('food_allowance', 0)),
-            housing_allowance=float(request.form.get('housing_allowance', 0))
+            base_salary=safe_decimal(request.form.get('base_salary', 0)),
+            hourly_rate=safe_decimal(request.form.get('hourly_rate', 0)),
+            pf_rate=safe_decimal(request.form.get('pf_rate', 12)),
+            transport_allowance=safe_decimal(request.form.get('transport_allowance', 0)),
+            food_allowance=safe_decimal(request.form.get('food_allowance', 0)),
+            housing_allowance=safe_decimal(request.form.get('housing_allowance', 0)),
+            state=request.form.get('state', 'Maharashtra')
         )
         db.session.add(employee)
         db.session.commit()
@@ -87,12 +88,13 @@ def edit_employee(id):
     if request.method == 'POST':
         employee.name = request.form.get('name')
         employee.employee_type = request.form.get('employee_type')
-        employee.base_salary = float(request.form.get('base_salary', 0))
-        employee.hourly_rate = float(request.form.get('hourly_rate', 0))
-        employee.pf_rate = float(request.form.get('pf_rate', 12))
-        employee.transport_allowance = float(request.form.get('transport_allowance', 0))
-        employee.food_allowance = float(request.form.get('food_allowance', 0))
-        employee.housing_allowance = float(request.form.get('housing_allowance', 0))
+        employee.base_salary = safe_decimal(request.form.get('base_salary', 0))
+        employee.hourly_rate = safe_decimal(request.form.get('hourly_rate', 0))
+        employee.pf_rate = safe_decimal(request.form.get('pf_rate', 12))
+        employee.transport_allowance = safe_decimal(request.form.get('transport_allowance', 0))
+        employee.food_allowance = safe_decimal(request.form.get('food_allowance', 0))
+        employee.housing_allowance = safe_decimal(request.form.get('housing_allowance', 0))
+        employee.state = request.form.get('state', 'Maharashtra')
         db.session.commit()
         flash('Employee updated successfully', 'success')
         return redirect(url_for('payroll.employees'))
@@ -118,21 +120,11 @@ def create_payroll():
         employee_id = int(request.form.get('employee_id'))
         employee = db.session.get(Employee, employee_id)
         
-        try:
-            overtime_hours = parse_non_negative_float(request.form.get('overtime_hours', 0), 'Overtime hours')
-            bonus          = parse_non_negative_float(request.form.get('bonus', 0), 'Bonus')
-            insurance      = parse_non_negative_float(request.form.get('insurance', 0), 'Insurance')
-            tax_deduction  = parse_non_negative_float(request.form.get('tax_deduction', 0), 'Tax deduction')
-        except ValueError as e:
-            flash(str(e), 'error')
-            return render_template('create_payroll.html', employees=employees)
+        overtime_hours = safe_decimal(request.form.get('overtime_hours', 0))
+        bonus = safe_decimal(request.form.get('bonus', 0))
+        insurance = safe_decimal(request.form.get('insurance', 0))
+        tax_deduction = safe_decimal(request.form.get('tax_deduction', 0))
 
-        if tax_deduction == 0:
-            annual_gross = float(gross_salary) * 12
-            _, monthly_tds = compute_tds_on_salary(annual_gross)
-            tax_deduction = float(monthly_tds)
-
-        # Convert all to Decimal for safe arithmetic with Numeric columns
         base = employee.base_salary
         hourly = employee.hourly_rate
         transport = employee.transport_allowance
@@ -140,17 +132,23 @@ def create_payroll():
         housing = employee.housing_allowance
         pf_rate = employee.pf_rate
 
-        overtime_amount = Decimal(str(overtime_hours)) * Decimal(str(hourly)) * Decimal('1.5')
-        gross_salary = base + overtime_amount + transport + food + housing + Decimal(str(bonus))
+        overtime_amount = overtime_hours * hourly * Decimal('1.5')
+        gross_salary = base + overtime_amount + transport + food + housing + bonus
+
+        if tax_deduction == 0:
+            annual_gross = gross_salary * 12
+            _, monthly_tds = compute_tds_on_salary(annual_gross)
+            tax_deduction = monthly_tds
+
+        from accounting_engine import compute_professional_tax
+        state = employee.state or 'Maharashtra'
+        professional_tax = compute_professional_tax(state, gross_salary)
 
         PF_WAGE_CEILING = Decimal('15000')
         pf_base = min(base, PF_WAGE_CEILING)
-        pf_employee = pf_base * Decimal(str(pf_rate)) / Decimal('100')
+        pf_employee = pf_base * pf_rate / Decimal('100')
         pf_employer = pf_employee
-        bonus_dec = Decimal(str(bonus))
-        tax_dec = Decimal(str(tax_deduction))
-        insurance_dec = Decimal(str(insurance))
-        total_deductions = pf_employee + tax_dec + insurance_dec
+        total_deductions = pf_employee + tax_deduction + insurance + professional_tax
         net_salary = gross_salary - total_deductions
         
         month = request.form.get('month')
@@ -172,6 +170,7 @@ def create_payroll():
             pf_employer=pf_employer,
             tax_deduction=tax_deduction,
             insurance=insurance,
+            professional_tax=professional_tax,
             total_deductions=total_deductions,
             net_salary=net_salary,
             created_by=session.get('user_id')
@@ -179,10 +178,15 @@ def create_payroll():
         db.session.add(payroll)
         db.session.flush()
 
-        from accounting_engine import record_salary_payment
-        record_salary_payment(date.today(), employee.name, gross_salary, pf_employee, pf_employer, tax_deduction, f"Salary {month}")
+        from accounting_engine import record_salary_payment, log_audit
+        record_salary_payment(date.today(), employee.name, gross_salary, pf_employee, pf_employer, tax_deduction, professional_tax, f"Salary {month}")
 
         db.session.commit()
+        
+        log_audit(db.session, session.get('user_id'), 'create', 'payroll', payroll.id,
+                 new_values={'employee_id': employee_id, 'month': month, 'year': year, 'net_salary': float(net_salary)},
+                 ip_address=request.remote_addr)
+        
         flash('Payroll created successfully', 'success')
         return redirect(url_for('payroll.payroll_list'))
     
@@ -333,9 +337,14 @@ def generate_payroll():
         pf_employee = (pf_base * Decimal(str(emp.pf_rate))) / Decimal('100')
         pf_employer = pf_employee
 
-        _, monthly_tds = compute_tds_on_salary(float(gross) * 12)
+        _, monthly_tds = compute_tds_on_salary(gross * 12)
         tax_dec = monthly_tds
-        total_deductions = pf_employee + tax_dec
+        
+        from accounting_engine import compute_professional_tax
+        state = emp.state or 'Maharashtra'
+        professional_tax = compute_professional_tax(state, gross)
+        
+        total_deductions = pf_employee + tax_dec + professional_tax
         net = gross - total_deductions
 
         payroll = Payroll(
@@ -354,6 +363,7 @@ def generate_payroll():
             pf_employer=pf_employer,
             tax_deduction=tax_dec,
             insurance=0,
+            professional_tax=professional_tax,
             total_deductions=total_deductions,
             net_salary=net,
             created_by=session.get('user_id')
@@ -362,7 +372,7 @@ def generate_payroll():
         db.session.flush()
 
         from accounting_engine import record_salary_payment
-        record_salary_payment(today, emp.name, gross, pf_employee, pf_employer, tax_dec, f"Monthly {month}")
+        record_salary_payment(today, emp.name, gross, pf_employee, pf_employer, tax_dec, professional_tax, f"Monthly {month}")
 
         created_count += 1
 

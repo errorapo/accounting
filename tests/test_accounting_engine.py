@@ -635,3 +635,300 @@ def test_same_account_debit_credit_rejected(app_context):
 
     with pytest.raises(ValueError):
         create_journal_entry(date.today(), "Test", cash.id, cash.id, Decimal('1000'))
+
+
+def test_accumulated_depreciation_is_contra(app_context):
+    """Accumulated Depreciation is a contra-asset that reduces total assets on balance sheet."""
+    from decimal import Decimal
+    from accounting_engine import run_monthly_depreciation, get_balance_sheet, initialize_default_accounts
+    from models import FixedAsset, Account
+
+    with app_context.app_context():
+        initialize_default_accounts()
+        db.session.commit()
+        db.session.expire_all()
+        
+        accum_dep_acc = Account.query.filter_by(name='Accumulated Depreciation').first()
+        assert accum_dep_acc is not None, "Accumulated Depreciation account should exist"
+        assert accum_dep_acc.is_contra is True, "Accumulated Depreciation should be marked as contra"
+
+        asset = FixedAsset(
+            name='Excavator',
+            purchase_date=date.today(),
+            cost=Decimal('600000'),
+            salvage_value=Decimal('60000'),
+            useful_life_years=10
+        )
+        db.session.add(asset)
+        db.session.commit()
+
+        result = run_monthly_depreciation()
+        assert result['total_depreciation'] > 0, "Depreciation should be calculated"
+
+        db.session.commit()
+        db.session.expire_all()
+        
+        initialize_default_accounts()
+        db.session.commit()
+        db.session.expire_all()
+        
+        bs = get_balance_sheet(date.today())
+
+        accum_dep_balance = abs(bs.get('accumulated_depreciation', 0))
+        assert accum_dep_balance > 0, "Accumulated Depreciation should have a balance"
+        
+        assert bs['total_assets'] < Decimal('600000'), "Total assets should be reduced by accumulated depreciation"
+
+
+def test_gst_itc_setoff_order(app_context):
+    """Test ITC utilization follows Section 49 order: IGST→IGST/CGST/SGST, then CGST→CGST, then SGST→SGST."""
+    from decimal import Decimal
+    from accounting_engine import (
+        record_purchase, record_sale, record_gst_payment, apply_itc_setoff,
+        get_account_balance, get_or_create_account
+    )
+    
+    with app_context.app_context():
+        db.session.commit()
+        db.session.expire_all()
+        
+        # Setup: Create ITC via inter-state purchase (IGST ITC)
+        record_purchase(date.today(), 'Vendor A', Decimal('10000'), Decimal('1800'),
+                       itc_eligible=True, payment_type='cash', description='IGST Purchase',
+                       supply_type='inter')
+        
+        # Create CGST/SGST ITC via intra-state purchase
+        record_purchase(date.today(), 'Vendor B', Decimal('5000'), Decimal('450'),
+                       itc_eligible=True, payment_type='cash', description='CGST/SGST Purchase',
+                       supply_type='intra')
+        
+        db.session.commit()
+        db.session.expire_all()
+        
+        # Create output liability via inter-state sale
+        record_sale(date.today(), 'Customer A', Decimal('8000'), Decimal('1440'),
+                   payment_type='cash', description='IGST Sale', supply_type='inter')
+        
+        # Create output liability via intra-state sale
+        record_sale(date.today(), 'Customer B', Decimal('4000'), Decimal('360'),
+                   payment_type='cash', description='CGST/SGST Sale', supply_type='intra')
+        
+        db.session.commit()
+        db.session.expire_all()
+        
+        igst_payable = get_or_create_account('IGST Payable', 'liability')
+        cgst_payable = get_or_create_account('CGST Payable', 'liability')
+        sgst_payable = get_or_create_account('SGST Payable', 'liability')
+        
+        igst_receivable = get_or_create_account('IGST Receivable', 'asset')
+        cgst_receivable = get_or_create_account('CGST Receivable', 'asset')
+        sgst_receivable = get_or_create_account('SGST Receivable', 'asset')
+        
+        # Verify liabilities: IGST=1440, CGST=180, SGST=180
+        assert get_account_balance(igst_payable.id) == Decimal('1440'), "IGST liability should be 1440"
+        assert get_account_balance(cgst_payable.id) == Decimal('180'), "CGST liability should be 180"
+        assert get_account_balance(sgst_payable.id) == Decimal('180'), "SGST liability should be 180"
+        
+        # Verify ITC: IGST=1800, CGST=225, SGST=225
+        assert get_account_balance(igst_receivable.id) == Decimal('1800'), "IGST ITC should be 1800"
+        assert get_account_balance(cgst_receivable.id) == Decimal('225'), "CGST ITC should be 225"
+        assert get_account_balance(sgst_receivable.id) == Decimal('225'), "SGST ITC should be 225"
+        
+        # Apply ITC setoff
+        igst_liability = get_account_balance(igst_payable.id)
+        cgst_liability = get_account_balance(cgst_payable.id)
+        sgst_liability = get_account_balance(sgst_payable.id)
+        result = apply_itc_setoff(date.today(), cgst_liability, sgst_liability, igst_liability)
+        
+        db.session.commit()
+        db.session.expire_all()
+        
+        # Per Section 49 order:
+        # IGST ITC (1800) → IGST liab (1440) = 360 remaining
+        # Remaining IGST ITC (360) → CGST liab (180) = 180 remaining
+        # Remaining IGST ITC (180) → SGST liab (180) = 0 remaining
+        # CGST ITC (225) → CGST liab (0 after IGST setoff) = 225 remaining
+        # SGST ITC (225) → SGST liab (0 after IGST setoff) = 225 remaining
+        
+        # After setoff:
+        assert get_account_balance(igst_payable.id) == Decimal('0'), "IGST liability should be 0 after ITC setoff"
+        assert get_account_balance(cgst_payable.id) == Decimal('0'), "CGST liability should be 0 after ITC setoff"
+        assert get_account_balance(sgst_payable.id) == Decimal('0'), "SGST liability should be 0 after ITC setoff"
+        
+        # Per Section 49, IGST ITC (1800) should be used first:
+        # - IGST liability (1440) fully set off
+        # - Remaining IGST ITC (360) → CGST liability (180), SGST liability (180)
+        # Total ITC used: 1440 + 180 + 180 = 1800
+        assert result['total_itc_used'] == Decimal('1800'), "Total ITC used should be 1800"
+        
+        # Verify ITC remaining
+        assert get_account_balance(igst_receivable.id) == Decimal('0'), "IGST ITC should be fully used"
+        assert get_account_balance(cgst_receivable.id) == Decimal('225'), "CGST ITC should remain unused"
+        assert get_account_balance(sgst_receivable.id) == Decimal('225'), "SGST ITC should remain unused"
+
+
+def test_gst_report_matches_ledger(app_context):
+    """Test GST report totals match ledger balances (not Sales/Purchase table queries)."""
+    from decimal import Decimal
+    from accounting_engine import (
+        record_purchase, record_sale, get_period_balance, get_or_create_account
+    )
+    from datetime import timedelta
+    
+    with app_context.app_context():
+        db.session.commit()
+        db.session.expire_all()
+        
+        start_date = date.today()
+        end_date = date.today()
+        
+        # Record sales and purchases
+        record_sale(date.today(), 'Customer A', Decimal('10000'), Decimal('900'),
+                   payment_type='cash', description='Sale 1', supply_type='intra')
+        record_sale(date.today(), 'Customer B', Decimal('20000'), Decimal('3600'),
+                   payment_type='cash', description='Sale 2', supply_type='inter')
+        record_purchase(date.today(), 'Vendor A', Decimal('5000'), Decimal('450'),
+                       itc_eligible=True, payment_type='cash', description='Purchase 1',
+                       supply_type='intra')
+        record_purchase(date.today(), 'Vendor B', Decimal('8000'), Decimal('1440'),
+                       itc_eligible=True, payment_type='cash', description='Purchase 2',
+                       supply_type='inter')
+        
+        db.session.commit()
+        db.session.expire_all()
+        
+        # Get ledger balances using get_period_balance
+        cgst_payable = get_or_create_account('CGST Payable', 'liability')
+        sgst_payable = get_or_create_account('SGST Payable', 'liability')
+        igst_payable = get_or_create_account('IGST Payable', 'liability')
+        cgst_receivable = get_or_create_account('CGST Receivable', 'asset')
+        sgst_receivable = get_or_create_account('SGST Receivable', 'asset')
+        igst_receivable = get_or_create_account('IGST Receivable', 'asset')
+        
+        output_cgst = get_period_balance(cgst_payable.id, start_date, end_date)
+        output_sgst = get_period_balance(sgst_payable.id, start_date, end_date)
+        output_igst = get_period_balance(igst_payable.id, start_date, end_date)
+        
+        input_cgst = get_period_balance(cgst_receivable.id, start_date, end_date)
+        input_sgst = get_period_balance(sgst_receivable.id, start_date, end_date)
+        input_igst = get_period_balance(igst_receivable.id, start_date, end_date)
+        
+        # From sales: intra (10000*9%) = 900 = CGST 450 + SGST 450; inter (20000*18%) = 3600 = IGST 3600
+        # From purchases (ITC): intra (5000*9%) = 450 = CGST 225 + SGST 225; inter (8000*18%) = 1440 = IGST 1440
+        
+        assert output_cgst == Decimal('450'), f"Output CGST should be 450, got {output_cgst}"
+        assert output_sgst == Decimal('450'), f"Output SGST should be 450, got {output_sgst}"
+        assert output_igst == Decimal('3600'), f"Output IGST should be 3600, got {output_igst}"
+        
+        assert input_cgst == Decimal('225'), f"Input CGST should be 225, got {input_cgst}"
+        assert input_sgst == Decimal('225'), f"Input SGST should be 225, got {input_sgst}"
+        assert input_igst == Decimal('1440'), f"Input IGST should be 1440, got {input_igst}"
+
+
+def test_record_sale_inter_state_uses_igst_not_cgst_sgst(app_context):
+    """Inter-state sale uses IGST only, not CGST/SGST split."""
+    from decimal import Decimal
+    from accounting_engine import record_sale, get_account_balance, get_or_create_account
+    from datetime import date
+    
+    with app_context.app_context():
+        db.session.commit()
+        db.session.expire_all()
+        
+        record_sale(date.today(), 'InterState Customer', Decimal('10000'), Decimal('1000'),
+                   payment_type='cash', description='Inter State Sale', supply_type='inter')
+        
+        db.session.commit()
+        db.session.expire_all()
+        
+        igst_payable = get_or_create_account('IGST Payable', 'liability')
+        cgst_payable = get_or_create_account('CGST Payable', 'liability')
+        sgst_payable = get_or_create_account('SGST Payable', 'liability')
+        
+        assert get_account_balance(igst_payable.id) == Decimal('1000'), \
+            f"IGST Payable should be 1000, got {get_account_balance(igst_payable.id)}"
+        assert get_account_balance(cgst_payable.id) == Decimal('0'), \
+            f"CGST Payable should be 0, got {get_account_balance(cgst_payable.id)}"
+        assert get_account_balance(sgst_payable.id) == Decimal('0'), \
+            f"SGST Payable should be 0, got {get_account_balance(sgst_payable.id)}"
+
+
+def test_weighted_average_cost_recalculates_correctly(app_context):
+    """WAC recalculates after new purchase: (10*1000+10*2000)/20 = 1500."""
+    from decimal import Decimal
+    from accounting_engine import record_purchase
+    from models import Inventory
+    from datetime import date
+    
+    with app_context.app_context():
+        db.session.commit()
+        db.session.expire_all()
+        
+        item = Inventory(
+            stone_type='Test Stone',
+            size='30mm',
+            opening_stock=Decimal('10'),
+            closing_stock=Decimal('10'),
+            rate_per_ton=Decimal('1000'),
+            purchases=Decimal('10'),
+            sales=Decimal('0'),
+            total_cost=Decimal('10000')
+        )
+        db.session.add(item)
+        db.session.commit()
+        
+        # Purchase 10 more tons at 2000/ton (amount=20000 for 10 tons)
+        record_purchase(
+            date.today(), 
+            vendor_name='Vendor 1', 
+            amount=Decimal('20000'), 
+            gst_amount=Decimal('3600'),
+            itc_eligible=True, 
+            payment_type='cash', 
+            description='Test Purchase 1',
+            quantity=Decimal('10'), 
+            stone_type='Test Stone', 
+            size='30mm',
+            supply_type='intra'
+        )
+        
+        db.session.commit()
+        db.session.expire_all()
+        
+        item = Inventory.query.filter_by(stone_type='Test Stone', size='30mm').first()
+        assert item is not None
+        
+        # Expected: (10*1000 + 10*2000) / 20 = 1500
+        assert item.rate_per_ton == Decimal('1500'), \
+            f"Expected WAC to be 1500, got {item.rate_per_ton}"
+
+
+def test_balance_sheet_net_book_value_excludes_accumulated_depreciation(app_context):
+    """Test that balance sheet net book value excludes accumulated depreciation."""
+    from decimal import Decimal
+    from accounting_engine import run_monthly_depreciation, get_balance_sheet
+    from models import FixedAsset
+    from datetime import date
+    
+    with app_context.app_context():
+        db.session.commit()
+        db.session.expire_all()
+        
+        asset = FixedAsset(
+            name='Test Asset',
+            purchase_date=date.today(),
+            cost=Decimal('100000'),
+            salvage_value=Decimal('10000'),
+            useful_life_years=10
+        )
+        db.session.add(asset)
+        db.session.commit()
+        
+        result = run_monthly_depreciation()
+        db.session.commit()
+        db.session.expire_all()
+        
+        bs = get_balance_sheet(date.today())
+        
+        assert bs['total_assets'] < Decimal('100000'), \
+            f"Total assets should be less than 100000 due to depreciation, got {bs['total_assets']}"

@@ -457,3 +457,87 @@ class TestEdgeCases:
             assert sale.igst_amount > 0
             assert sale.cgst_amount == 0
             assert sale.sgst_amount == 0
+
+
+@pytest.fixture
+def accountant_client(app_context):
+    """Return authenticated test client with accountant role."""
+    app = app_context
+    client = app.test_client()
+    
+    with app.app_context():
+        from werkzeug.security import generate_password_hash
+        user = User.query.filter_by(username='accountant').first()
+        if user is None:
+            user = User(username='accountant',
+                    password_hash=generate_password_hash('test123'),
+                    role='accountant')
+            db.session.add(user)
+            db.session.commit()
+        
+        customer = Customer.query.first()
+        if customer is None:
+            customer = Customer(name='Test Customer', phone='9999999999')
+            db.session.add(customer)
+            db.session.commit()
+        
+        item = Inventory.query.first()
+        if item is None:
+            item = Inventory(stone_type='Granite', size='20mm',
+                         opening_stock=100, purchases=0, sales=0,
+                         closing_stock=100, rate_per_ton=1200)
+            db.session.add(item)
+            db.session.commit()
+    
+    with client.session_transaction() as sess:
+        sess['user_id'] = user.id
+        sess['role'] = user.role
+    
+    return client
+
+
+class TestAccountantRestrictions:
+    """Tests for accountant role restrictions."""
+
+    def test_accountant_cannot_reverse_journal_entry(self, accountant_client, app_context):
+        """Accountant role cannot reverse journal entries - returns 302 redirect."""
+        from models import JournalEntry, Account
+        client = accountant_client
+        
+        with app_context.app_context():
+            db.session.commit()
+            db.session.expire_all()
+            
+            cash_acc = Account.query.filter_by(name='Cash').first()
+            sales_acc = Account.query.filter_by(name='Sales Revenue').first()
+            
+            from accounting_engine import create_journal_entry
+            create_journal_entry(date.today(), 'Test Entry', cash_acc.id, sales_acc.id, Decimal('1000'))
+            db.session.commit()
+            
+            journal = JournalEntry.query.first()
+            entry_id = journal.id
+        
+        response = client.post(f'/journal/reverse/{entry_id}', follow_redirects=False)
+        
+        assert response.status_code == 302, \
+            f"Expected 302 (redirect), got {response.status_code}, accountant should be blocked"
+
+
+class TestRateLimiting:
+    """Tests for rate limiting."""
+
+    def test_login_rate_limit_not_applied_in_test_mode(self, app_context):
+        """Login rate limiting is not applied in TESTING mode - 11th request returns 200."""
+        client = app_context.test_client()
+        
+        responses = []
+        for i in range(11):
+            response = client.post('/login', data={
+                'username': 'testuser',
+                'password': 'wrongpassword'
+            }, follow_redirects=False)
+            responses.append(response.status_code)
+        
+        assert responses[10] == 200, \
+            f"Expected 200 (no rate limiting in test), got {responses[10]}"

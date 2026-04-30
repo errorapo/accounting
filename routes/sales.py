@@ -7,8 +7,8 @@ from datetime import datetime, date
 from decimal import Decimal
 
 from sqlalchemy import select
-from accounting_engine import record_sale, record_payment, get_or_create_account, create_journal_entry_no_commit
-from validators import parse_positive_float, parse_non_negative_float, parse_gst_rate
+from accounting_engine import record_sale, record_payment, get_or_create_account, create_journal_entry_no_commit, log_audit
+from validators import parse_positive_float, parse_non_negative_float, parse_gst_rate, validate_phone
 
 bp = Blueprint('sales', __name__)
 
@@ -40,9 +40,12 @@ def add_customer():
             flash('Customer name is required', 'error')
             return render_template('add_customer.html')
         
-        if phone and not phone.replace('+', '').replace('-', '').replace(' ', '').replace('(', '').replace(')', '').isdigit():
-            flash('Phone must contain only numbers', 'error')
-            return render_template('add_customer.html')
+        if phone:
+            try:
+                validate_phone(phone)
+            except ValueError as e:
+                flash(str(e), 'error')
+                return render_template('add_customer.html')
         
         customer = Customer(
             name=name,
@@ -51,6 +54,11 @@ def add_customer():
         )
         db.session.add(customer)
         db.session.commit()
+        
+        log_audit(db.session, session.get('user_id'), 'create', 'customer', customer.id,
+                 new_values={'name': name, 'phone': phone}, ip_address=request.remote_addr)
+        db.session.commit()
+        
         flash('Customer added successfully', 'success')
         return redirect(url_for('sales.customers'))
     return render_template('add_customer.html')
@@ -148,7 +156,7 @@ def create_sale():
         item = Inventory.query.filter_by(stone_type=stone_type, size=size).with_for_update().first()
         if item:
             item.sales += Decimal(str(quantity))
-            item.closing_stock = item.closing_stock - Decimal(str(quantity))
+            item.closing_stock = item.computed_closing_stock
 
         # Atomic journal entries (no commit inside)
         sales_acc = get_or_create_account('Sales Revenue', 'income')
@@ -180,6 +188,11 @@ def create_sale():
             create_journal_entry_no_commit(date.today(), f"COGS - {stone_type} {size}", cogs_acc.id, inventory_acc.id, cogs_amount)
 
         db.session.commit()
+        
+        log_audit(db.session, session.get('user_id'), 'create', 'sales', sale.id,
+                 new_values={'invoice_number': sale.invoice_number, 'amount': float(total_amount)},
+                 ip_address=request.remote_addr)
+        
         flash(f'Sale created successfully - Invoice: {sale.invoice_number}', 'success')
         return redirect(url_for('sales.sales_list'))
     
@@ -189,6 +202,7 @@ def create_sale():
 @login_required
 def add_payment(id):
     """Record a payment against a credit sale (partial or full)."""
+    from flask import current_app
     sale = Sales.query.get_or_404(id)
 
     if sale.payment_type == 'cash':
@@ -196,37 +210,45 @@ def add_payment(id):
         return redirect(url_for('sales.sales_list'))
 
     if request.method == 'POST':
-        amount = float(request.form.get('amount', 0))
-        payment_mode = request.form.get('payment_mode', 'cash')
-        notes = request.form.get('notes', '')
+        try:
+            amount = float(request.form.get('amount', 0))
+            payment_mode = request.form.get('payment_mode', 'cash')
+            notes = request.form.get('notes', '')
 
-        if amount <= 0:
-            flash('Amount must be positive', 'error')
-            return render_template('add_payment.html', sale=sale)
+            if amount <= 0:
+                flash('Amount must be positive', 'error')
+                return render_template('add_payment.html', sale=sale)
 
-        invoice = Sales.query.get_or_404(id)
-        total_paid = sum(p.amount for p in invoice.payments)
-        if total_paid + Decimal(str(amount)) > invoice.total_amount:
-            flash('Payment exceeds invoice amount', 'error')
+            already_paid = sum(p.amount for p in sale.payments)
+            max_allowed = float(sale.total_amount or 0) - already_paid
+            
+            if amount > max_allowed + 0.01:
+                flash(f'Payment exceeds outstanding balance of ₹{max_allowed:.2f}', 'error')
+                return redirect(url_for('sales.sales_list'))
+
+            payment = Payment(
+                sale_id=sale.id,
+                amount=amount,
+                payment_date=date.today(),
+                payment_mode=payment_mode,
+                notes=notes
+            )
+            db.session.add(payment)
+
+            record_payment(date.today(), sale.id, amount, payment_mode, notes, f"Payment: {sale.invoice_number}")
+
+            new_total_paid = already_paid + Decimal(str(amount))
+            if new_total_paid >= sale.total_amount - Decimal('0.01'):
+                sale.payment_status = 'paid'
+
+            db.session.commit()
+            flash(f'Payment of ₹{amount:.2f} recorded', 'success')
             return redirect(url_for('sales.sales_list'))
-
-        payment = Payment(
-            sale_id=sale.id,
-            amount=amount,
-            payment_date=date.today(),
-            payment_mode=payment_mode,
-            notes=notes
-        )
-        db.session.add(payment)
-
-        record_payment(date.today(), sale.id, amount, payment_mode, notes, f"Payment: {sale.invoice_number}")
-
-        if total_paid + Decimal(str(amount)) >= sale.total_amount - Decimal('0.01'):
-            sale.payment_status = 'paid'
-
-        db.session.commit()
-        flash(f'Payment of ₹{amount:.2f} recorded', 'success')
-        return redirect(url_for('sales.sales_list'))
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.exception('Payment recording failed')
+            flash(f'Error: {str(e)}', 'error')
+            return redirect(url_for('sales.sales_list'))
 
     paid = sum(p.amount for p in sale.payments)
     outstanding = sale.total_amount - paid

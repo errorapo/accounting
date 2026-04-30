@@ -130,6 +130,7 @@ def mark_paid(id):
 @login_required
 def add_payment(id):
     """Record a payment against a credit purchase (partial or full)."""
+    from flask import current_app
     purchase = Purchase.query.get_or_404(id)
 
     if purchase.payment_type == 'cash':
@@ -137,36 +138,45 @@ def add_payment(id):
         return redirect(url_for('purchases.purchases_list'))
 
     if request.method == 'POST':
-        amount = float(request.form.get('amount', 0))
-        payment_mode = request.form.get('payment_mode', 'cash')
-        notes = request.form.get('notes', '')
+        try:
+            amount = float(request.form.get('amount', 0))
+            payment_mode = request.form.get('payment_mode', 'cash')
+            notes = request.form.get('notes', '')
 
-        if amount <= 0:
-            flash('Amount must be positive', 'error')
-            return render_template('add_payment.html', purchase=purchase)
+            if amount <= 0:
+                flash('Amount must be positive', 'error')
+                return render_template('add_payment.html', purchase=purchase)
 
-        paid_total = sum(p.amount for p in purchase.payments) + amount
-        if paid_total > purchase.total_amount:
-            flash(f'Payment exceeds outstanding. Outstanding: ₹{purchase.total_amount - sum(p.amount for p in purchase.payments):.2f}', 'error')
-            return render_template('add_payment.html', purchase=purchase)
+            already_paid = sum(p.amount for p in purchase.payments)
+            max_allowed = float(purchase.total_amount or 0) - already_paid
+            
+            if amount > max_allowed + 0.01:
+                flash(f'Payment exceeds outstanding balance of ₹{max_allowed:.2f}', 'error')
+                return render_template('add_payment.html', purchase=purchase)
 
-        payment = PurchasePayment(
-            purchase_id=purchase.id,
-            amount=amount,
-            payment_date=date.today(),
-            payment_mode=payment_mode,
-            notes=notes
-        )
-        db.session.add(payment)
+            payment = PurchasePayment(
+                purchase_id=purchase.id,
+                amount=amount,
+                payment_date=date.today(),
+                payment_mode=payment_mode,
+                notes=notes
+            )
+            db.session.add(payment)
 
-        record_purchase_payment(date.today(), purchase.id, amount, payment_mode, notes, f"Payment: {purchase.invoice_number}")
+            record_purchase_payment(date.today(), purchase.id, amount, payment_mode, notes, f"Payment: {purchase.invoice_number}")
 
-        if paid_total >= purchase.total_amount - 0.01:
-            purchase.payment_status = 'paid'
+            new_total_paid = already_paid + Decimal(str(amount))
+            if new_total_paid >= purchase.total_amount - Decimal('0.01'):
+                purchase.payment_status = 'paid'
 
-        db.session.commit()
-        flash(f'Payment of ₹{amount:.2f} recorded', 'success')
-        return redirect(url_for('purchases.purchases_list'))
+            db.session.commit()
+            flash(f'Payment of ₹{amount:.2f} recorded', 'success')
+            return redirect(url_for('purchases.purchases_list'))
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.exception('Purchase payment recording failed')
+            flash(f'Error: {str(e)}', 'error')
+            return redirect(url_for('purchases.purchases_list'))
 
     paid = sum(p.amount for p in purchase.payments)
     outstanding = purchase.total_amount - paid

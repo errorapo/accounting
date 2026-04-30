@@ -338,3 +338,51 @@ def test_tds_higher_slab(app_context):
             f"Annual TDS should be 20800 (2L@5%+1L@10%+4%cess), got {annual_tds}"
         assert monthly_tds == Decimal('1733.33'), \
             f"Monthly TDS should be 1733.33, got {monthly_tds}"
+
+
+def test_create_payroll_auto_tds(client, app_context):
+    """Test that tax_deduction=0 triggers auto TDS computation."""
+    from decimal import Decimal
+    from models import Employee, Payroll, User
+    
+    with app_context.app_context():
+        db.session.commit()
+        db.session.expire_all()
+        
+        user = User.query.filter_by(username='admin').first()
+        if not user:
+            user = User(username='admin', password_hash='x', role='admin')
+            db.session.add(user)
+            db.session.commit()
+        
+        emp = Employee(
+            name='Test Employee',
+            employee_type='Office Staff',
+            base_salary=Decimal('120000'),
+            hourly_rate=Decimal('500'),
+            pf_rate=Decimal('12'),
+            state='Maharashtra'
+        )
+        db.session.add(emp)
+        db.session.commit()
+        db.session.expire_all()
+        
+        with client.session_transaction() as sess:
+            sess['user_id'] = user.id
+            sess['role'] = user.role
+        
+        response = client.post('/payroll/create', data={
+            'employee_id': emp.id,
+            'month': '2025-04',
+            'year': 2025,
+            'overtime_hours': '0',
+            'bonus': '0',
+            'insurance': '0',
+            'tax_deduction': '0'
+        }, follow_redirects=True)
+        
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+        
+        payroll = Payroll.query.filter_by(employee_id=emp.id).first()
+        assert payroll is not None, "Payroll should be created"
+        assert payroll.tax_deduction > 0, f"Tax deduction should be > 0, got {payroll.tax_deduction}"

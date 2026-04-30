@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from routes.dashboard import login_required
 from ext import db
 from models import Vendor
+from validators import validate_gstin, validate_phone
 
 bp = Blueprint('vendor', __name__)
 
@@ -15,11 +16,30 @@ def vendors_list():
 @login_required
 def add_vendor():
     if request.method == 'POST':
+        phone = request.form.get('phone')
+        gstin = request.form.get('gstin')
+        
+        errors = []
+        try:
+            validate_phone(phone)
+        except ValueError as e:
+            errors.append(str(e))
+        
+        if gstin:
+            try:
+                validate_gstin(gstin)
+            except ValueError as e:
+                errors.append(str(e))
+        
+        if errors:
+            flash("; ".join(errors), 'error')
+            return render_template('add_vendor.html')
+        
         vendor = Vendor(
             name=request.form.get('name'),
-            phone=request.form.get('phone'),
+            phone=phone,
             address=request.form.get('address'),
-            gstin=request.form.get('gstin'),
+            gstin=gstin,
             state=request.form.get('state')
         )
         db.session.add(vendor)
@@ -33,10 +53,29 @@ def add_vendor():
 def edit_vendor(id):
     vendor = Vendor.query.get_or_404(id)
     if request.method == 'POST':
+        phone = request.form.get('phone')
+        gstin = request.form.get('gstin')
+        
+        errors = []
+        try:
+            validate_phone(phone)
+        except ValueError as e:
+            errors.append(str(e))
+        
+        if gstin:
+            try:
+                validate_gstin(gstin)
+            except ValueError as e:
+                errors.append(str(e))
+        
+        if errors:
+            flash("; ".join(errors), 'error')
+            return render_template('edit_vendor.html', vendor=vendor)
+        
         vendor.name = request.form.get('name')
-        vendor.phone = request.form.get('phone')
+        vendor.phone = phone
         vendor.address = request.form.get('address')
-        vendor.gstin = request.form.get('gstin')
+        vendor.gstin = gstin
         vendor.state = request.form.get('state')
         db.session.commit()
         flash('Vendor updated successfully', 'success')

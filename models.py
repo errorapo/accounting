@@ -1,3 +1,4 @@
+from sqlalchemy import CheckConstraint
 from ext import db
 from datetime import datetime, timezone
 
@@ -21,6 +22,7 @@ class Employee(db.Model):
     food_allowance = db.Column(db.Numeric(precision=15, scale=2), default=0)
     housing_allowance = db.Column(db.Numeric(precision=15, scale=2), default=0)
     is_active = db.Column(db.Boolean, default=True)
+    state = db.Column(db.String(50), default='Maharashtra')
     created_at = db.Column(db.DateTime, default=utc_now)
 
 class Attendance(db.Model):
@@ -49,12 +51,17 @@ class Payroll(db.Model):
     pf_employer = db.Column(db.Numeric(precision=15, scale=2), default=0)
     tax_deduction = db.Column(db.Numeric(precision=15, scale=2), default=0)
     insurance = db.Column(db.Numeric(precision=15, scale=2), default=0)
+    professional_tax = db.Column(db.Numeric(precision=15, scale=2), default=0)
     total_deductions = db.Column(db.Numeric(precision=15, scale=2), default=0)
     net_salary = db.Column(db.Numeric(precision=15, scale=2), default=0)
     created_at = db.Column(db.DateTime, default=utc_now)
     created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
 
     employee = db.relationship('Employee', backref='payroll_records')
+    
+    __table_args__ = (
+        CheckConstraint('net_salary >= 0', name='payroll_net_salary_non_negative'),
+    )
 
 class Inventory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -67,6 +74,14 @@ class Inventory(db.Model):
     rate_per_ton = db.Column(db.Numeric(precision=15, scale=2), default=0)
     total_cost = db.Column(db.Numeric(precision=15, scale=2), default=0)
     updated_at = db.Column(db.DateTime, default=utc_now)
+    
+    @property
+    def computed_closing_stock(self):
+        return (self.opening_stock or 0) + (self.purchases or 0) - (self.sales or 0)
+    
+    __table_args__ = (
+        CheckConstraint('closing_stock >= 0', name='inventory_closing_stock_non_negative'),
+    )
 
 class Customer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -108,6 +123,11 @@ class Sales(db.Model):
     created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
 
     customer = db.relationship('Customer', backref='sales_records')
+    
+    __table_args__ = (
+        CheckConstraint('quantity > 0', name='sales_quantity_positive'),
+        CheckConstraint('amount >= 0', name='sales_amount_non_negative'),
+    )
 
 class Purchase(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -162,11 +182,12 @@ class Account(db.Model):
     name = db.Column(db.String(100), unique=True, nullable=False)
     account_type = db.Column(db.String(20), nullable=False)
     is_active = db.Column(db.Boolean, default=True)
+    is_contra = db.Column(db.Boolean, default=False)
 
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     date = db.Column(db.Date, default=lambda: datetime.now(timezone.utc).date)
-    description = db.Column(db.String(200))
+    description = db.Column(db.String(500))
     account_id = db.Column(db.Integer, db.ForeignKey('account.id'))
     debit = db.Column(db.Numeric(precision=15, scale=2), default=0)
     credit = db.Column(db.Numeric(precision=15, scale=2), default=0)
@@ -176,6 +197,11 @@ class Transaction(db.Model):
     original_entry_id = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, default=utc_now)
     created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    
+    __table_args__ = (
+        CheckConstraint('debit >= 0', name='transaction_debit_positive'),
+        CheckConstraint('credit >= 0', name='transaction_credit_positive'),
+    )
 
 class FixedAsset(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -192,7 +218,7 @@ class FixedAsset(db.Model):
 class JournalEntry(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     date = db.Column(db.Date, default=lambda: datetime.now(timezone.utc).date)
-    description = db.Column(db.String(200))
+    description = db.Column(db.String(500))
     debit_account_id = db.Column(db.Integer, db.ForeignKey('account.id'))
     credit_account_id = db.Column(db.Integer, db.ForeignKey('account.id'))
     amount = db.Column(db.Numeric(precision=15, scale=2))
@@ -201,6 +227,10 @@ class JournalEntry(db.Model):
     original_entry_id = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, default=utc_now)
     created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    
+    __table_args__ = (
+        CheckConstraint('amount > 0', name='journal_entry_amount_positive'),
+    )
 
 class InvoiceSequence(db.Model):
     id          = db.Column(db.Integer, primary_key=True)

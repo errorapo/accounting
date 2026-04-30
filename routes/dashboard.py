@@ -57,6 +57,19 @@ def admin_dashboard():
     
     recent_sales = Sales.query.order_by(Sales.created_at.desc()).limit(5).all()
     recent_payroll = Payroll.query.order_by(Payroll.created_at.desc()).limit(5).all()
+
+
+@bp.route('/admin/audit-log')
+@login_required
+def audit_log():
+    """Show last 200 audit log entries (admin only)."""
+    from models import AuditLog
+    if session.get('role') != 'admin':
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard.index'))
+    
+    logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).limit(200).all()
+    return render_template('audit_log.html', logs=logs)
     
     customers = Customer.query.all()
     customer_sales = []
